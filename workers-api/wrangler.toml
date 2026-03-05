@@ -1,0 +1,13 @@
+name = "cloud-pass-api"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+[vars]
+DEV_MODE = "true"
+CF_TEAM_DOMAIN = "your-team"
+
+[[d1_databases]]
+binding = "CLOUD_PASS_DB"
+database_name = "cloud-pass-db"
+database_id = "local"
+migrations_dir = "drizzle"

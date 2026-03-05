@@ -36,9 +36,9 @@ export default function Navbar() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {user ? (
+            {user && (
               <>
-                <span className="text-sm text-gray-500 hidden sm:inline">{user.username}</span>
+                <span className="text-sm text-gray-500 hidden sm:inline">{user.display_name}</span>
                 <Button variant="ghost" size="sm" onClick={logout} className="hidden sm:inline-flex">
                   Logout
                 </Button>
@@ -55,15 +55,6 @@ export default function Navbar() {
                     )}
                   </svg>
                 </button>
-              </>
-            ) : (
-              <>
-                <Link href="/login">
-                  <Button variant="ghost" size="sm">Log In</Button>
-                </Link>
-                <Link href="/register">
-                  <Button size="sm">Sign Up</Button>
-                </Link>
               </>
             )}
           </div>
@@ -86,7 +77,7 @@ export default function Navbar() {
               </Link>
             )}
             <div className="border-t border-gray-100 pt-2 mt-2">
-              <span className="block px-3 py-1 text-xs text-gray-400">{user.username}</span>
+              <span className="block px-3 py-1 text-xs text-gray-400">{user.display_name}</span>
               <button
                 onClick={() => { closeMenu(); logout(); }}
                 className="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"

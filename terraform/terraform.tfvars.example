@@ -1,0 +1,15 @@
+cloudflare_api_token = "your-api-token"
+account_id           = "your-account-id"
+zone_id              = "your-zone-id"
+domain               = "example.com"
+api_subdomain        = "api"
+app_subdomain        = "cloudpass"
+cf_team_domain       = "your-team"
+
+# Optional: Google OAuth for CF Access
+# google_client_id     = ""
+# google_client_secret = ""
+
+# Optional: GitHub OAuth for CF Access
+# github_client_id     = ""
+# github_client_secret = ""

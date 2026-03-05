@@ -37,3 +37,12 @@ next-env.d.ts
 
 # Claude Code
 .claude/
+# Terraform
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Wrangler local state
+.wrangler/

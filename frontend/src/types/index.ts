@@ -1,16 +1,10 @@
 // Auth
 export interface User {
   id: number;
-  username: string;
   email: string;
+  display_name: string;
   is_active: boolean;
   is_admin: boolean;
-}
-
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
 }
 
 // Provider

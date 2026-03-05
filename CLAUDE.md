@@ -37,7 +37,7 @@ Key points:
 - Each review must read every line of every changed file — no shortcuts
 - Classify findings as CRITICAL (runtime errors), IMPORTANT (incorrect behavior), MINOR (code quality)
 - Fix all CRITICAL/IMPORTANT before declaring done; MINOR can be batched
-- Run `eslint`, `ruff check`, and `tsc --noEmit` after each fix round to catch regressions
+- Run `eslint`, `tsc --noEmit` after each fix round to catch regressions
 
 #### 5. Verification Before Done
 

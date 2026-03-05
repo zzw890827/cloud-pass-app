@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787/api/v1";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -7,71 +7,29 @@ class ApiError extends Error {
   }
 }
 
-async function getToken(): Promise<string | null> {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
-}
-
-function setTokens(access: string, refresh: string) {
-  localStorage.setItem("access_token", access);
-  localStorage.setItem("refresh_token", refresh);
-}
-
-function clearTokens() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
-}
-
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem("refresh_token");
-  if (!refreshToken) return null;
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!res.ok) {
-      clearTokens();
-      return null;
-    }
-    const data = await res.json();
-    setTokens(data.access_token, data.refresh_token);
-    return data.access_token;
-  } catch {
-    clearTokens();
-    return null;
-  }
-}
-
 async function request<T>(
   path: string,
-  options: RequestInit = {},
-  retry = true
+  options: RequestInit = {}
 ): Promise<T> {
-  const token = await getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+
+  // In dev mode, send dev user email header
+  if (process.env.NEXT_PUBLIC_DEV_MODE === "true") {
+    headers["X-Dev-User-Email"] = process.env.NEXT_PUBLIC_DEV_USER_EMAIL || "dev@example.com";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === "true";
 
-  if (res.status === 401 && retry) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      return request<T>(path, options, false);
-    }
-    clearTokens();
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
-    throw new ApiError(401, "Unauthorized");
-  }
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    // credentials: "include" sends CF Access cookie in production
+    // In dev mode, auth is via X-Dev-User-Email header instead
+    ...(isDevMode ? {} : { credentials: "include" as RequestCredentials }),
+  });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: "Request failed" }));
@@ -84,23 +42,7 @@ async function request<T>(
 
 export const api = {
   // Auth
-  register: (data: { username: string; email: string; password: string }) =>
-    request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
-
-  login: async (data: { username: string; password: string }) => {
-    const res = await request<{ access_token: string; refresh_token: string }>(
-      "/auth/login",
-      { method: "POST", body: JSON.stringify(data) }
-    );
-    setTokens(res.access_token, res.refresh_token);
-    return res;
-  },
-
   me: () => request<import("@/types").User>("/auth/me"),
-
-  logout: () => {
-    clearTokens();
-  },
 
   // Providers
   getProviders: () => request<import("@/types").Provider[]>("/providers"),
@@ -198,4 +140,4 @@ export const api = {
     }),
 };
 
-export { ApiError, clearTokens, setTokens };
+export { ApiError };
