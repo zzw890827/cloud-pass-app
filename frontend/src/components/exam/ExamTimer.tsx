@@ -12,7 +12,8 @@ export default function ExamTimer({ startedAt, timeLimitMinutes, onTimeUp }: Exa
   const [remaining, setRemaining] = useState<number>(0);
 
   useEffect(() => {
-    const endTime = new Date(startedAt).getTime() + timeLimitMinutes * 60 * 1000;
+    const utcStarted = startedAt.endsWith("Z") ? startedAt : startedAt + "Z";
+    const endTime = new Date(utcStarted).getTime() + timeLimitMinutes * 60 * 1000;
 
     const update = () => {
       const now = Date.now();
