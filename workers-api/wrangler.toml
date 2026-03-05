@@ -11,3 +11,14 @@ binding = "CLOUD_PASS_DB"
 database_name = "cloud-pass-db"
 database_id = "local"
 migrations_dir = "drizzle"
+
+[env.production]
+name = "cloud-pass-api"
+[env.production.vars]
+DEV_MODE = "false"
+
+[[env.production.d1_databases]]
+binding = "CLOUD_PASS_DB"
+database_name = "cloud-pass-db"
+database_id = "5a33a2e7-2eb0-492a-b30c-8a6528c5a4ef"
+migrations_dir = "drizzle"
