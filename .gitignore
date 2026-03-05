@@ -1,0 +1,39 @@
+# Seed data (exam question banks)
+seed/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+backend/venv/
+
+# SQLite database
+*.db
+
+# Environment variables
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / Next.js (frontend has its own .gitignore too)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Claude Code
+.claude/
