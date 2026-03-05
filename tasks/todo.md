@@ -1,46 +1,43 @@
-# Cloud Pass App - Development Progress
+# Cloud Pass: Cloudflare Migration
 
-## Phase 1: Foundation
-- [x] FastAPI project setup with dependencies
-- [x] SQLAlchemy models (Provider, Exam, Question, Option, User, UserProgress, Bookmark)
-- [x] Database setup (async SQLite)
-- [x] Auth API (register, login, refresh, me)
-- [x] JSON import API
-- [x] Next.js project (bun, Tailwind, TypeScript)
-- [x] Root layout + Navbar
-- [x] Login/Register pages + AuthContext
-- [x] API client (api-client.ts)
+## Phase 1: Foundation — Workers API Skeleton + Drizzle Schema
+- [x] package.json, wrangler.toml, tsconfig.json
+- [x] Drizzle schema (all 9 tables)
+- [x] drizzle.config.ts + src/db/client.ts
+- [x] src/index.ts with /health
+- [x] Generate migration + verify
 
-## Phase 2: Practice Mode
-- [x] Providers/Exams API endpoints
-- [x] Questions API (list, detail, submit)
-- [x] Progress API
-- [x] Dashboard (Provider grid)
-- [x] Exam overview page (progress stats)
-- [x] Practice page (QuestionCard, SingleChoice, MultiChoice, ExplanationPanel, Navigator)
+## Phase 2: Auth Middleware (CF Access)
+- [x] Types (env.ts, context.ts)
+- [x] CF Access JWT verification (cf-access.ts)
+- [x] Error handling (errors.ts)
+- [x] Auth + DB middleware
 
-## Phase 3: Bookmarks + Review
-- [x] Bookmarks API
-- [x] BookmarkButton component
-- [x] Review page (reuses practice components, exam filter)
+## Phase 3: Core Routes — Auth(me), Providers, Exams
+- [x] Routes: auth.ts, providers.ts, exams.ts
+- [x] Services: progress-service.ts
 
-## Phase 4: Polish
-- [x] Progress reset functionality
-- [x] Admin import page (file upload UI)
-- [x] Responsive design
-- [x] Error handling & loading states
+## Phase 4: Questions, Bookmarks, Progress
+- [x] Routes: questions.ts, bookmarks.ts, progress.ts
+- [x] Services: question-service.ts, bookmark-service.ts
 
-## Code Review Fixes Applied
-- [x] Fixed order_index calculation in import service
-- [x] Added onupdate to attempted_at in UserProgress
-- [x] Added is_active check in login_user
-- [x] Fixed previously-answered questions not showing correct/incorrect highlighting
-- [x] Added per_page cap (200) to prevent abuse
-- [x] Provider/exam metadata now updates on re-import
-- [x] Fixed auto-submit race condition with useCallback + ref guard
-- [x] Pinned bcrypt==4.0.1 for passlib compatibility
+## Phase 5: Exam Sessions
+- [x] Routes + service + schemas
 
-## Verification
-- [x] Backend: All service layer tests pass (import, auth, questions, bookmarks, progress, reset)
-- [x] Frontend: Builds successfully with no TypeScript errors
-- [ ] Manual: Start both servers and test full flow
+## Phase 6: Admin Import + Seed
+- [x] Routes + service + schemas + seed script
+
+## Phase 7: Terraform IaC
+- [x] All terraform files
+
+## Phase 8: Frontend Adaptation
+- [x] Remove login/register, simplify auth, update api-client
+
+## Phase 9: Cleanup
+- [x] Remove backend/, update docs
+
+## Code Review Fixes
+- [x] CRITICAL: Progress detail camelCase → snake_case keys
+- [x] IMPORTANT: Added input validation on session/question submit routes
+- [x] IMPORTANT: Added NaN guard on exam_id query params
+- [x] MINOR: Removed unused sql import from providers.ts

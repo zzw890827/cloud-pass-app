@@ -7,13 +7,13 @@ import type { User } from "@/types";
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+const CF_TEAM_DOMAIN = process.env.NEXT_PUBLIC_CF_TEAM_DOMAIN || "";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -29,32 +29,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      refresh().finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    // CF Access handles auth — just try to fetch user profile
+    refresh().finally(() => setLoading(false));
   }, [refresh]);
 
-  const login = async (username: string, password: string) => {
-    await api.login({ username, password });
-    await refresh();
-  };
-
-  const register = async (username: string, email: string, password: string) => {
-    await api.register({ username, email, password });
-    await api.login({ username, password });
-    await refresh();
-  };
-
   const logout = () => {
-    api.logout();
     setUser(null);
+    if (CF_TEAM_DOMAIN) {
+      // Redirect to CF Access logout
+      window.location.href = `https://${CF_TEAM_DOMAIN}.cloudflareaccess.com/cdn-cgi/access/logout`;
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
