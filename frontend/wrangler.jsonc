@@ -9,6 +9,6 @@
     "binding": "ASSETS"
   },
   "routes": [
-    { "pattern": "cloudpass.nerotechs.com", "zone_name": "nerotechs.com" }
+    { "pattern": "cloudpass.nerotechs.com/*", "zone_name": "nerotechs.com" }
   ]
 }
