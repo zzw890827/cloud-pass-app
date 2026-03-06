@@ -33,15 +33,12 @@ resource "cloudflare_zero_trust_access_application" "cloud_pass" {
   domain           = "${var.app_subdomain}.${var.domain}"
   type             = "self_hosted"
   session_duration = "24h"
-}
 
-# CF Access Policy — allow everyone (or restrict by email domain)
-resource "cloudflare_zero_trust_access_policy" "allow_all" {
-  account_id = var.account_id
-  decision   = "allow"
-  name       = "Allow authenticated users"
-
-  include = [{
-    everyone = {}
+  policies = [{
+    decision = "allow"
+    name     = "Allow authenticated users"
+    include  = [{
+      everyone = {}
+    }]
   }]
 }
