@@ -16,6 +16,7 @@ migrations_dir = "drizzle"
 name = "cloud-pass-api"
 [env.production.vars]
 DEV_MODE = "false"
+CF_TEAM_DOMAIN = "cloud-pass"
 
 [[env.production.d1_databases]]
 binding = "CLOUD_PASS_DB"
