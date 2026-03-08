@@ -45,8 +45,8 @@ function CustomTooltip({ active, payload }: TooltipProps) {
 }
 
 interface CustomTickProps {
-  x?: number;
-  y?: number;
+  x?: string | number;
+  y?: string | number;
   payload?: { value: string };
   data: ChartDataItem[];
   examId: number;
@@ -94,7 +94,8 @@ export default function ErrorFrequencyChart({ items, examId }: ErrorFrequencyCha
     router.push(`/exams/${examId}/practice?questionId=${questionId}`);
   };
 
-  const handleBarClick = (barData: { activePayload?: Array<{ payload: ChartDataItem }> }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleBarClick = (barData: any) => {
     const questionId = barData?.activePayload?.[0]?.payload?.question_id;
     if (questionId) handleNavigate(questionId);
   };
