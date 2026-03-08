@@ -3,6 +3,22 @@ import type { Database } from "../db/client";
 import { questions, options, userProgress, bookmarks } from "../db/schema";
 import { AppError } from "../lib/errors";
 
+// D1 limits bound parameters to 100 per query.
+// Batch inArray queries to stay under the limit.
+const D1_PARAM_BATCH = 95;
+
+async function batchedQuery<T>(
+  ids: number[],
+  queryFn: (chunk: number[]) => Promise<T[]>
+): Promise<T[]> {
+  if (ids.length <= D1_PARAM_BATCH) return queryFn(ids);
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += D1_PARAM_BATCH) {
+    results.push(...(await queryFn(ids.slice(i, i + D1_PARAM_BATCH))));
+  }
+  return results;
+}
+
 export async function getQuestionsPage(
   db: Database,
   examId: number,
@@ -41,20 +57,24 @@ export async function getQuestionsPage(
 
   const qIds = questionRows.map((q) => q.id);
 
-  const progressRows = await db
-    .select({
-      questionId: userProgress.questionId,
-      isCorrect: userProgress.isCorrect,
-    })
-    .from(userProgress)
-    .where(and(eq(userProgress.userId, userId), inArray(userProgress.questionId, qIds)));
+  const progressRows = await batchedQuery(qIds, (chunk) =>
+    db
+      .select({
+        questionId: userProgress.questionId,
+        isCorrect: userProgress.isCorrect,
+      })
+      .from(userProgress)
+      .where(and(eq(userProgress.userId, userId), inArray(userProgress.questionId, chunk)))
+  );
 
   const progressMap = new Map(progressRows.map((p) => [p.questionId, p.isCorrect]));
 
-  const bookmarkRows = await db
-    .select({ questionId: bookmarks.questionId })
-    .from(bookmarks)
-    .where(and(eq(bookmarks.userId, userId), inArray(bookmarks.questionId, qIds)));
+  const bookmarkRows = await batchedQuery(qIds, (chunk) =>
+    db
+      .select({ questionId: bookmarks.questionId })
+      .from(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), inArray(bookmarks.questionId, chunk)))
+  );
 
   const bookmarkSet = new Set(bookmarkRows.map((b) => b.questionId));
 
