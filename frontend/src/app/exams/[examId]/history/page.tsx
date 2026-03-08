@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ScoreChart from "@/components/exam/ScoreChart";
-import ErrorFrequencyTable from "@/components/exam/ErrorFrequencyTable";
+import ErrorFrequencyChart from "@/components/exam/ErrorFrequencyChart";
 import Spinner from "@/components/ui/Spinner";
 import type { ExamSessionHistory, ExamErrorReport } from "@/types";
 
@@ -97,7 +97,7 @@ export default function ExamHistoryPage() {
 
       <Card className="p-5 mt-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Error Frequency</h2>
-        <ErrorFrequencyTable items={errorReport.items} />
+        <ErrorFrequencyChart items={errorReport.items} examId={examId} />
       </Card>
 
       <div className="mt-6">
