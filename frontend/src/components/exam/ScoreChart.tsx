@@ -13,7 +13,10 @@ export default function ScoreChart({ items, passPercentage }: ScoreChartProps) {
     return <p className="text-sm text-gray-500">No completed exams yet.</p>;
   }
 
-  const data = items.map((item, idx) => ({
+  // API returns newest-first; reverse for chronological display
+  const chronological = [...items].reverse();
+
+  const data = chronological.map((item, idx) => ({
     attempt: idx + 1,
     score: item.score ?? 0,
     date: item.completed_at
