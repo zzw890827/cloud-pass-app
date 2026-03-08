@@ -18,10 +18,8 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect }:
   // Auto-switch page when the active question is outside the current page
   useEffect(() => {
     const targetPage = Math.floor(currentIndex / PAGE_SIZE);
-    if (targetPage !== currentPage) {
-      setCurrentPage(targetPage);
-    }
-  }, [currentIndex, currentPage]);
+    setCurrentPage(targetPage);
+  }, [currentIndex]);
 
   const pageStart = currentPage * PAGE_SIZE;
   const pageEnd = Math.min(pageStart + PAGE_SIZE, questions.length);
