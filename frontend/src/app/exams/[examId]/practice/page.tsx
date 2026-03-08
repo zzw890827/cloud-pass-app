@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -12,7 +12,10 @@ import type { Question, QuestionListItem } from "@/types";
 
 export default function PracticePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const examId = Number(params.examId);
+  const initialQuestionId = searchParams.get("questionId");
+  const initialIdxSet = useRef(false);
 
   const [questions, setQuestions] = useState<QuestionListItem[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -26,9 +29,14 @@ export default function PracticePage() {
     if (!examId) return;
     api.getQuestions(examId, 1, 200).then((page) => {
       setQuestions(page.items);
+      if (initialQuestionId && !initialIdxSet.current) {
+        const idx = page.items.findIndex((q) => q.id === Number(initialQuestionId));
+        if (idx !== -1) setCurrentIdx(idx);
+        initialIdxSet.current = true;
+      }
       setLoading(false);
     });
-  }, [examId]);
+  }, [examId, initialQuestionId]);
 
   // Load current question detail
   const loadQuestion = useCallback(async (questionId: number) => {
