@@ -53,6 +53,14 @@
 - **Fix**: Batch `inArray` queries into chunks of 95 IDs, merge results
 - **Rule**: Any `inArray` on user-controlled or growing data must use batched queries
 
+## React Patterns
+
+### useEffect dependency array causes feedback loops
+- Including state that the effect *writes to* in its own dependency array creates a feedback loop
+- Example: `useEffect(() => { setCurrentPage(targetPage); }, [currentIndex, currentPage])` — clicking a pagination button updates `currentPage`, which re-triggers the effect, which resets `currentPage` back
+- **Fix**: Only include the *source of truth* (`currentIndex`) in deps, not the *derived state* (`currentPage`) that the effect sets
+- **Rule**: Never list a state variable in `useEffect` deps if the effect calls that variable's setter based on a different input
+
 ## General Patterns
 
 ### Don't mix IaC and CI deployments for the same resource
