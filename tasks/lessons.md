@@ -45,6 +45,14 @@
 - `NEXT_PUBLIC_API_URL` must include full path: `https://api.nerotechs.com/api/v1`
 - Set via CLI: `gh variable set NEXT_PUBLIC_API_URL --body "https://api.nerotechs.com/api/v1"`
 
+### D1 bound parameter limit (100 max per query)
+- Cloudflare D1 allows **max 100 bound parameters** per SQL query
+- Drizzle `inArray(column, ids)` generates `IN (?, ?, ...)` — each ID is one bound parameter
+- When `ids.length + other params > 100`, the query fails with a 500 error
+- **Trigger**: Adding questions to an exam pushed total past 100; `getQuestionsPage` with `per_page=200` tried 101 IDs + 1 userId = 102 params
+- **Fix**: Batch `inArray` queries into chunks of 95 IDs, merge results
+- **Rule**: Any `inArray` on user-controlled or growing data must use batched queries
+
 ## General Patterns
 
 ### Don't mix IaC and CI deployments for the same resource
