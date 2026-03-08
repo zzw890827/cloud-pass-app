@@ -66,7 +66,10 @@ function CustomYAxisTick({ x = 0, y = 0, payload, data, onNavigate }: CustomTick
         fill="#2563eb"
         fontSize={12}
         style={{ cursor: "pointer", textDecoration: "underline" }}
-        onClick={() => item && onNavigate(item.question_id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (item) onNavigate(item.question_id);
+        }}
       >
         {payload.value}
       </text>
@@ -102,8 +105,8 @@ export default function ErrorFrequencyChart({ items, examId }: ErrorFrequencyCha
   const chartHeight = Math.max(200, items.length * 44);
 
   return (
-    <div style={{ height: chartHeight }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div>
+      <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
           data={data}
           layout="vertical"
