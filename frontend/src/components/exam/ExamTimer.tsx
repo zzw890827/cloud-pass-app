@@ -5,19 +5,26 @@ import { useState, useEffect } from "react";
 interface ExamTimerProps {
   startedAt: string;
   timeLimitMinutes: number;
+  elapsedSeconds: number;
+  paused: boolean;
   onTimeUp?: () => void;
 }
 
-export default function ExamTimer({ startedAt, timeLimitMinutes, onTimeUp }: ExamTimerProps) {
+export default function ExamTimer({ startedAt, timeLimitMinutes, elapsedSeconds, paused, onTimeUp }: ExamTimerProps) {
   const [remaining, setRemaining] = useState<number>(0);
 
   useEffect(() => {
-    const utcStarted = startedAt.endsWith("Z") ? startedAt : startedAt + "Z";
-    const endTime = new Date(utcStarted).getTime() + timeLimitMinutes * 60 * 1000;
+    const totalSeconds = timeLimitMinutes * 60;
 
     const update = () => {
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((endTime - now) / 1000));
+      if (paused) {
+        setRemaining(Math.max(0, totalSeconds - elapsedSeconds));
+        return;
+      }
+      const utcStarted = startedAt.endsWith("Z") ? startedAt : startedAt + "Z";
+      const startTime = new Date(utcStarted).getTime();
+      const activeElapsed = Math.floor((Date.now() - startTime) / 1000);
+      const diff = Math.max(0, totalSeconds - elapsedSeconds - activeElapsed);
       setRemaining(diff);
       if (diff === 0) {
         onTimeUp?.();
@@ -25,9 +32,11 @@ export default function ExamTimer({ startedAt, timeLimitMinutes, onTimeUp }: Exa
     };
 
     update();
+    if (paused) return;
+
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [startedAt, timeLimitMinutes, onTimeUp]);
+  }, [startedAt, timeLimitMinutes, elapsedSeconds, paused, onTimeUp]);
 
   const hours = Math.floor(remaining / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);
@@ -41,7 +50,7 @@ export default function ExamTimer({ startedAt, timeLimitMinutes, onTimeUp }: Exa
 
   return (
     <span className={`font-mono text-sm font-medium ${isLow ? "text-red-600" : "text-gray-700"}`}>
-      {formatted}
+      {paused ? `${formatted} (Paused)` : formatted}
     </span>
   );
 }
