@@ -9,6 +9,8 @@ import {
   submitSessionAnswer,
   completeSession,
   abandonSession,
+  pauseSession,
+  resumeSession,
   getSessionResult,
   getSessionHistory,
   getErrorReport,
@@ -119,6 +121,26 @@ sessionRoutes.post("/:id/complete", async (c) => {
   const sessionId = Number(c.req.param("id"));
 
   const result = await completeSession(db, sessionId, user.id);
+  return c.json(result);
+});
+
+// POST /exam-sessions/:id/pause
+sessionRoutes.post("/:id/pause", async (c) => {
+  const db = c.get("db");
+  const user = c.get("user");
+  const sessionId = Number(c.req.param("id"));
+
+  const result = await pauseSession(db, sessionId, user.id);
+  return c.json(result);
+});
+
+// POST /exam-sessions/:id/resume
+sessionRoutes.post("/:id/resume", async (c) => {
+  const db = c.get("db");
+  const user = c.get("user");
+  const sessionId = Number(c.req.param("id"));
+
+  const result = await resumeSession(db, sessionId, user.id);
   return c.json(result);
 });
 

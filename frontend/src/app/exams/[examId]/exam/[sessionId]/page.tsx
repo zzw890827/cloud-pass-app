@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
@@ -10,6 +10,8 @@ import ExamNavigator from "@/components/exam/ExamNavigator";
 import ExamTimer from "@/components/exam/ExamTimer";
 import Spinner from "@/components/ui/Spinner";
 import type { ExamSession, ExamSessionQuestionDetail } from "@/types";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787/api/v1";
 
 export default function ExamSessionPage() {
   const params = useParams();
@@ -23,6 +25,12 @@ export default function ExamSessionPage() {
   const [loading, setLoading] = useState(true);
   const [loadingQ, setLoadingQ] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [pausingOrResuming, setPausingOrResuming] = useState(false);
+
+  // Track paused state in a ref for event handlers
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
 
   useEffect(() => {
     if (!sessionId) return;
@@ -32,6 +40,7 @@ export default function ExamSessionPage() {
         return;
       }
       setSession(s);
+      setPaused(!!s.paused_at);
       setLoading(false);
     });
   }, [sessionId, examId, router]);
@@ -52,9 +61,79 @@ export default function ExamSessionPage() {
     }
   }, [currentIdx, session, loadQuestion]);
 
+  const handlePause = useCallback(async () => {
+    if (pausingOrResuming) return;
+    setPausingOrResuming(true);
+    try {
+      const updated = await api.pauseExamSession(sessionId);
+      setSession(updated);
+      setPaused(true);
+    } finally {
+      setPausingOrResuming(false);
+    }
+  }, [sessionId, pausingOrResuming]);
+
+  const handleResume = useCallback(async () => {
+    if (pausingOrResuming) return;
+    setPausingOrResuming(true);
+    try {
+      const updated = await api.resumeExamSession(sessionId);
+      // resumeSession may auto-complete if time expired
+      if (updated.status !== "in_progress") {
+        router.push(`/exams/${examId}/exam/${sessionId}/result`);
+        return;
+      }
+      setSession(updated);
+      setPaused(false);
+    } finally {
+      setPausingOrResuming(false);
+    }
+  }, [sessionId, examId, router, pausingOrResuming]);
+
+  // Auto-pause on visibility change and beforeunload
+  useEffect(() => {
+    const firePause = () => {
+      const url = `${API_BASE}/exam-sessions/${sessionId}/pause`;
+      const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === "true";
+      // Use fetch with keepalive for reliability on page unload
+      // This also supports custom headers (needed for dev mode auth)
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (isDevMode) {
+        headers["X-Dev-User-Email"] = process.env.NEXT_PUBLIC_DEV_USER_EMAIL || "dev@example.com";
+      }
+      fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+        keepalive: true,
+        ...(isDevMode ? {} : { credentials: "include" as RequestCredentials }),
+      }).catch(() => {});
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && !pausedRef.current) {
+        firePause();
+        setPaused(true);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (!pausedRef.current) {
+        firePause();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [sessionId]);
+
   const handleSubmitAnswer = useCallback(async (selectedOptionIds: number[]) => {
     await api.submitSessionAnswer(sessionId, currentIdx, selectedOptionIds);
-    // Update local session question state
     setSession((prev) => {
       if (!prev) return prev;
       return {
@@ -118,6 +197,8 @@ export default function ExamSessionPage() {
             <ExamTimer
               startedAt={session.started_at}
               timeLimitMinutes={session.time_limit_minutes}
+              elapsedSeconds={session.elapsed_seconds}
+              paused={paused}
               onTimeUp={handleTimeUp}
             />
           </div>
@@ -125,11 +206,28 @@ export default function ExamSessionPage() {
             <Button variant="secondary" size="sm" onClick={handleAbandon}>
               Abandon
             </Button>
+            {paused ? (
+              <Button variant="primary" size="sm" onClick={handleResume} disabled={pausingOrResuming}>
+                Resume
+              </Button>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={handlePause} disabled={pausingOrResuming}>
+                Pause
+              </Button>
+            )}
             <Button variant="success" size="sm" onClick={handleComplete}>
               Submit Exam
             </Button>
           </div>
         </div>
+
+        {/* Paused overlay */}
+        {paused && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+            <p className="text-yellow-800 font-medium">Exam Paused</p>
+            <p className="text-yellow-600 text-sm mt-1">Click Resume to continue your exam.</p>
+          </div>
+        )}
 
         {/* Mobile collapsible navigator */}
         <div className="lg:hidden mb-4">
@@ -158,13 +256,15 @@ export default function ExamSessionPage() {
           )}
         </div>
 
-        <Card className="p-4 sm:p-6">
-          {loadingQ || !currentQ ? (
-            <Spinner className="py-10" />
-          ) : (
-            <ExamQuestionCard question={currentQ} onSubmit={handleSubmitAnswer} />
-          )}
-        </Card>
+        <div className={paused ? "opacity-50 pointer-events-none" : ""}>
+          <Card className="p-4 sm:p-6">
+            {loadingQ || !currentQ ? (
+              <Spinner className="py-10" />
+            ) : (
+              <ExamQuestionCard question={currentQ} onSubmit={handleSubmitAnswer} />
+            )}
+          </Card>
+        </div>
 
         <div className="flex items-center justify-between mt-4">
           <Button variant="secondary" onClick={goPrev} disabled={currentIdx === 0}>

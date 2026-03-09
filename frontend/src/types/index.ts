@@ -177,6 +177,8 @@ export interface ExamSession {
   num_questions: number;
   pass_percentage: number;
   time_limit_minutes: number;
+  paused_at: string | null;
+  elapsed_seconds: number;
   started_at: string;
   completed_at: string | null;
   score: number | null;
