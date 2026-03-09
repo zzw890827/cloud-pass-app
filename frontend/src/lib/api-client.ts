@@ -117,6 +117,16 @@ export const api = {
       `/exam-sessions/${sessionId}/complete`,
       { method: "POST" }
     ),
+  pauseExamSession: (sessionId: number) =>
+    request<import("@/types").ExamSession>(
+      `/exam-sessions/${sessionId}/pause`,
+      { method: "POST" }
+    ),
+  resumeExamSession: (sessionId: number) =>
+    request<import("@/types").ExamSession>(
+      `/exam-sessions/${sessionId}/resume`,
+      { method: "POST" }
+    ),
   abandonExamSession: (sessionId: number) =>
     request<void>(`/exam-sessions/${sessionId}/abandon`, { method: "POST" }),
   getSessionResult: (sessionId: number) =>

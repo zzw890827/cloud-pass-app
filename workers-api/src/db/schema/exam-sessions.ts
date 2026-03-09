@@ -23,6 +23,8 @@ export const examSessions = sqliteTable(
     correctCount: integer("correct_count"),
     totalAnswered: integer("total_answered"),
     passed: integer("passed", { mode: "boolean" }),
+    pausedAt: text("paused_at"),
+    elapsedSeconds: integer("elapsed_seconds").notNull().default(0),
     startedAt: text("started_at")
       .notNull()
       .default(sql`(datetime('now'))`),

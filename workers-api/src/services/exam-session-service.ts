@@ -308,11 +308,73 @@ export async function completeSession(db: Database, sessionId: number, userId: n
       correctCount,
       totalAnswered,
       passed,
+      pausedAt: null,
       completedAt: sql`datetime('now')`,
     })
     .where(eq(examSessions.id, sessionId));
 
   return getSessionResult(db, sessionId, userId);
+}
+
+export async function pauseSession(db: Database, sessionId: number, userId: number) {
+  const session = await db.query.examSessions.findFirst({
+    where: and(eq(examSessions.id, sessionId), eq(examSessions.userId, userId)),
+  });
+  if (!session) throw new AppError(404, "Session not found");
+  if (session.status !== "in_progress")
+    throw new AppError(400, "Session is not in progress");
+
+  // Idempotent: if already paused, return current state
+  if (session.pausedAt) {
+    return formatSessionResponse(db, session.id);
+  }
+
+  // Calculate elapsed seconds since last resume/start
+  const utcStarted = session.startedAt.endsWith("Z") ? session.startedAt : session.startedAt + "Z";
+  const activeElapsed = Math.floor((Date.now() - new Date(utcStarted).getTime()) / 1000);
+  const totalElapsed = session.elapsedSeconds + Math.max(0, activeElapsed);
+
+  await db
+    .update(examSessions)
+    .set({
+      pausedAt: sql`(datetime('now'))`,
+      elapsedSeconds: totalElapsed,
+    })
+    .where(eq(examSessions.id, sessionId));
+
+  return formatSessionResponse(db, session.id);
+}
+
+export async function resumeSession(db: Database, sessionId: number, userId: number) {
+  const session = await db.query.examSessions.findFirst({
+    where: and(eq(examSessions.id, sessionId), eq(examSessions.userId, userId)),
+  });
+  if (!session) throw new AppError(404, "Session not found");
+  if (session.status !== "in_progress")
+    throw new AppError(400, "Session is not in progress");
+
+  // Idempotent: if not paused, return current state
+  if (!session.pausedAt) {
+    return formatSessionResponse(db, session.id);
+  }
+
+  // Check if time already expired while paused
+  const totalAllowed = session.timeLimitMinutes * 60;
+  if (session.elapsedSeconds >= totalAllowed) {
+    // Auto-complete the session
+    return completeSession(db, sessionId, userId);
+  }
+
+  // Reset startedAt to now so timer reference resets, clear pausedAt
+  await db
+    .update(examSessions)
+    .set({
+      pausedAt: null,
+      startedAt: sql`(datetime('now'))`,
+    })
+    .where(eq(examSessions.id, sessionId));
+
+  return formatSessionResponse(db, session.id);
 }
 
 export async function abandonSession(db: Database, sessionId: number, userId: number) {
@@ -327,6 +389,7 @@ export async function abandonSession(db: Database, sessionId: number, userId: nu
     .update(examSessions)
     .set({
       status: "abandoned",
+      pausedAt: null,
       completedAt: sql`datetime('now')`,
     })
     .where(eq(examSessions.id, sessionId));
@@ -532,6 +595,8 @@ async function formatSessionResponse(db: Database, sessionId: number) {
     num_questions: session.numQuestions,
     pass_percentage: session.passPercentage,
     time_limit_minutes: session.timeLimitMinutes,
+    paused_at: session.pausedAt,
+    elapsed_seconds: session.elapsedSeconds,
     started_at: session.startedAt,
     completed_at: session.completedAt,
     score: session.score,
