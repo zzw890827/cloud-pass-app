@@ -36,7 +36,8 @@ out/
 next-env.d.ts
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/commands/
 # Terraform
 terraform.tfvars
 *.tfstate
