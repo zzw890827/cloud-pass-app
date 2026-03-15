@@ -185,11 +185,21 @@ export interface ExamSession {
   questions: ExamSessionQuestionListItem[];
 }
 
+export interface SessionQuestionResultOption {
+  id: number;
+  label: string;
+  option_text: string;
+  is_correct: boolean;
+}
+
 export interface SessionQuestionResult {
   question_id: number;
   external_id: string;
+  question_text: string;
+  question_type: string;
   is_correct: boolean | null;
   selected_option_ids: number[] | null;
+  options: SessionQuestionResultOption[];
 }
 
 export interface ExamSessionResult {
