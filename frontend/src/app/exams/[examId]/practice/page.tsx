@@ -10,6 +10,8 @@ import QuestionNavigator from "@/components/question/QuestionNavigator";
 import Spinner from "@/components/ui/Spinner";
 import type { Question, QuestionListItem } from "@/types";
 
+const API_PER_PAGE = 200;
+
 export default function PracticePage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -24,11 +26,21 @@ export default function PracticePage() {
   const [loadingQ, setLoadingQ] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
-  // Load question list
+  // Pagination state for API-level pages (200 per page)
+  const [apiPage, setApiPage] = useState(1);
+  const [totalApiPages, setTotalApiPages] = useState(1);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchingPage = useRef<number | null>(null);
+
+  // Load first page of questions
   useEffect(() => {
     if (!examId) return;
-    api.getQuestions(examId, 1, 200).then((page) => {
+    api.getQuestions(examId, 1, API_PER_PAGE).then((page) => {
       setQuestions(page.items);
+      setApiPage(1);
+      setTotalApiPages(page.total_pages);
+      setTotalQuestions(page.total);
       if (initialQuestionId && !initialIdxSet.current) {
         const idx = page.items.findIndex((q) => q.id === Number(initialQuestionId));
         if (idx !== -1) setCurrentIdx(idx);
@@ -37,6 +49,32 @@ export default function PracticePage() {
       setLoading(false);
     });
   }, [examId, initialQuestionId]);
+
+  // Auto-fetch next API page when user reaches the last navigator page (50-item page)
+  // of currently loaded questions
+  const loadNextApiPage = useCallback(async () => {
+    const nextPage = apiPage + 1;
+    if (nextPage > totalApiPages || fetchingPage.current === nextPage) return;
+    fetchingPage.current = nextPage;
+    setLoadingMore(true);
+    try {
+      const page = await api.getQuestions(examId, nextPage, API_PER_PAGE);
+      setQuestions((prev) => [...prev, ...page.items]);
+      setApiPage(nextPage);
+    } finally {
+      setLoadingMore(false);
+      fetchingPage.current = null;
+    }
+  }, [examId, apiPage, totalApiPages]);
+
+  // Trigger load when user navigates into the last navigator page (last 50) of loaded questions
+  useEffect(() => {
+    if (apiPage >= totalApiPages) return;
+    const lastNavPageStart = Math.floor((questions.length - 1) / 50) * 50;
+    if (currentIdx >= lastNavPageStart) {
+      loadNextApiPage();
+    }
+  }, [currentIdx, questions.length, apiPage, totalApiPages, loadNextApiPage]);
 
   // Load current question detail
   const loadQuestion = useCallback(async (questionId: number) => {
@@ -93,7 +131,7 @@ export default function PracticePage() {
             onClick={() => setNavOpen(!navOpen)}
             className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700"
           >
-            <span>Questions ({attempted}/{questions.length})</span>
+            <span>Questions ({attempted}/{totalQuestions})</span>
             <svg
               className={`w-4 h-4 transition-transform ${navOpen ? "rotate-180" : ""}`}
               fill="none"
@@ -127,9 +165,10 @@ export default function PracticePage() {
             Previous
           </Button>
           <span className="text-sm text-gray-500">
-            {currentIdx + 1} / {questions.length}
+            {currentIdx + 1} / {totalQuestions}
+            {loadingMore && " (loading…)"}
           </span>
-          <Button variant="secondary" onClick={goNext} disabled={currentIdx === questions.length - 1}>
+          <Button variant="secondary" onClick={goNext} disabled={currentIdx === questions.length - 1 && apiPage >= totalApiPages}>
             Next
           </Button>
         </div>

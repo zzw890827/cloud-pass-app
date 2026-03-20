@@ -61,6 +61,14 @@
 - **Fix**: Only include the *source of truth* (`currentIndex`) in deps, not the *derived state* (`currentPage`) that the effect sets
 - **Rule**: Never list a state variable in `useEffect` deps if the effect calls that variable's setter based on a different input
 
+## Frontend Data Loading
+
+### Hardcoded large per_page hides truncation bugs
+- Practice mode used `api.getQuestions(examId, 1, 200)` — exams with >200 questions silently truncated
+- The backend already returned `total` and `total_pages` but the frontend ignored them
+- **Fix**: Track API pagination state, auto-fetch next page when user reaches the last navigator page (50-item chunk) of loaded questions
+- **Rule**: When fetching paginated data, always use the `total` from the API response for counts/progress — never use `array.length` as the total when the API tells you otherwise
+
 ## General Patterns
 
 ### Don't mix IaC and CI deployments for the same resource
