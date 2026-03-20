@@ -147,6 +147,7 @@ export default function PracticePage() {
                 questions={questions}
                 currentIndex={currentIdx}
                 onSelect={handleNavSelect}
+                totalQuestions={totalQuestions}
               />
             </Card>
           )}
@@ -182,6 +183,7 @@ export default function PracticePage() {
             questions={questions}
             currentIndex={currentIdx}
             onSelect={setCurrentIdx}
+            totalQuestions={totalQuestions}
           />
         </Card>
       </div>

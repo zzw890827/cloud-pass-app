@@ -9,9 +9,11 @@ interface QuestionNavigatorProps {
   questions: QuestionListItem[];
   currentIndex: number;
   onSelect: (index: number) => void;
+  totalQuestions?: number;
 }
 
-export default function QuestionNavigator({ questions, currentIndex, onSelect }: QuestionNavigatorProps) {
+export default function QuestionNavigator({ questions, currentIndex, onSelect, totalQuestions }: QuestionNavigatorProps) {
+  const displayTotal = totalQuestions ?? questions.length;
   const totalPages = Math.ceil(questions.length / PAGE_SIZE);
   const [currentPage, setCurrentPage] = useState(() => Math.floor(currentIndex / PAGE_SIZE));
 
@@ -37,7 +39,7 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect }:
             &#8249; Prev
           </button>
           <span>
-            {pageStart + 1}–{pageEnd} / {questions.length}
+            {pageStart + 1}–{pageEnd} / {displayTotal}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
