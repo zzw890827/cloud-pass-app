@@ -101,9 +101,24 @@ export default function PracticePage() {
     );
   };
 
+  const pendingNextRef = useRef(false);
+
   const goNext = () => {
-    if (currentIdx < questions.length - 1) setCurrentIdx(currentIdx + 1);
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(currentIdx + 1);
+    } else if (apiPage < totalApiPages) {
+      loadNextApiPage();
+      pendingNextRef.current = true;
+    }
   };
+
+  // Auto-advance after new questions are appended
+  useEffect(() => {
+    if (pendingNextRef.current && currentIdx < questions.length - 1) {
+      pendingNextRef.current = false;
+      setCurrentIdx(currentIdx + 1);
+    }
+  }, [questions.length, currentIdx]);
 
   const goPrev = () => {
     if (currentIdx > 0) setCurrentIdx(currentIdx - 1);
