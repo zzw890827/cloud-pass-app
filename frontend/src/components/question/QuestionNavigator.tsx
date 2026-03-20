@@ -10,11 +10,12 @@ interface QuestionNavigatorProps {
   currentIndex: number;
   onSelect: (index: number) => void;
   totalQuestions?: number;
+  onLoadMore?: () => void;
 }
 
-export default function QuestionNavigator({ questions, currentIndex, onSelect, totalQuestions }: QuestionNavigatorProps) {
+export default function QuestionNavigator({ questions, currentIndex, onSelect, totalQuestions, onLoadMore }: QuestionNavigatorProps) {
   const displayTotal = totalQuestions ?? questions.length;
-  const totalPages = Math.ceil(questions.length / PAGE_SIZE);
+  const totalPages = Math.ceil(displayTotal / PAGE_SIZE);
   const [currentPage, setCurrentPage] = useState(() => Math.floor(currentIndex / PAGE_SIZE));
 
   // Auto-switch page when the active question is outside the current page
@@ -22,6 +23,14 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect, t
     const targetPage = Math.floor(currentIndex / PAGE_SIZE);
     setCurrentPage(targetPage);
   }, [currentIndex]);
+
+  // Request more data when navigating to a page beyond loaded questions
+  useEffect(() => {
+    const pageStart = currentPage * PAGE_SIZE;
+    if (pageStart >= questions.length && onLoadMore) {
+      onLoadMore();
+    }
+  }, [currentPage, questions.length, onLoadMore]);
 
   const pageStart = currentPage * PAGE_SIZE;
   const pageEnd = Math.min(pageStart + PAGE_SIZE, questions.length);
@@ -39,7 +48,7 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect, t
             &#8249; Prev
           </button>
           <span>
-            {pageStart + 1}–{pageEnd} / {displayTotal}
+            {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, displayTotal)} / {displayTotal}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
@@ -49,6 +58,9 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect, t
             Next &#8250;
           </button>
         </div>
+      )}
+      {pageQuestions.length === 0 && pageStart < displayTotal && (
+        <p className="text-xs text-gray-400 text-center py-2">Loading…</p>
       )}
       <div className="flex flex-wrap gap-1 sm:gap-1.5">
         {pageQuestions.map((q, pageIdx) => {
