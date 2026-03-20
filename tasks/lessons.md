@@ -61,6 +61,12 @@
 - **Fix**: Only include the *source of truth* (`currentIndex`) in deps, not the *derived state* (`currentPage`) that the effect sets
 - **Rule**: Never list a state variable in `useEffect` deps if the effect calls that variable's setter based on a different input
 
+### Pass API totals to child components — don't let them derive from partial arrays
+- When parent fetches paginated data and passes the array to a child, the child sees `array.length` (e.g., 200) not the real total (e.g., 239)
+- `QuestionNavigator` showed "1–50 / 200" because it used `questions.length` — the user saw the total jump to 239 only after auto-fetch triggered
+- **Fix**: Add an optional `totalQuestions` prop so the parent can pass the API's `total` down
+- **Rule**: Any child component that displays a "total" count from a paginated parent must receive the true total as a prop, not compute it from the array it was given
+
 ## Frontend Data Loading
 
 ### Hardcoded large per_page hides truncation bugs
