@@ -7,10 +7,48 @@ import {
   examSessions,
   examSessionQuestions,
   providers,
+  userProgress,
+  bookmarks,
 } from "../db/schema";
 import { AppError } from "../lib/errors";
 
 // --- Weighted question selection ---
+
+const WEIGHT_CONFIG = {
+  BASE: 1.0,
+  NEW_BONUS: 3.0,
+  ERROR_COUNT_CAP: 5,
+  ERROR_COUNT_FACTOR: 0.4,
+  ERROR_RATE_FACTOR: 2.0,
+  BOOKMARK_BONUS: 1.5,
+  FORGETTING_FACTOR: 2.0,
+  BASE_STABILITY_DAYS: 1.0,
+  STABILITY_MULTIPLIER: 2.0,
+  MAX_STABILITY_DAYS: 60.0,
+  WRONG_ANSWER_STABILITY: 0.5,
+};
+
+function calculateForgettingFactor(
+  daysSinceReview: number,
+  correctRate: number,
+  answeredCount: number,
+  lastWasCorrect: boolean
+): number {
+  let stability: number;
+  if (!lastWasCorrect) {
+    stability = WEIGHT_CONFIG.WRONG_ANSWER_STABILITY;
+  } else {
+    const effectiveCount = Math.min(answeredCount, 5);
+    const correctStreak = Math.round(correctRate * effectiveCount);
+    stability = Math.min(
+      WEIGHT_CONFIG.BASE_STABILITY_DAYS *
+        Math.pow(WEIGHT_CONFIG.STABILITY_MULTIPLIER, Math.max(correctStreak - 1, 0)),
+      WEIGHT_CONFIG.MAX_STABILITY_DAYS
+    );
+  }
+  const retention = Math.exp(-daysSinceReview / stability);
+  return 1 - retention;
+}
 
 async function selectWeightedQuestions(
   db: Database,
@@ -18,60 +56,186 @@ async function selectWeightedQuestions(
   userId: number,
   numToSelect: number
 ): Promise<number[]> {
-  // Get all question IDs for exam
-  const allQuestions = await db
-    .select({ id: questions.id })
-    .from(questions)
-    .where(eq(questions.examId, examId));
+  // 4 parallel queries
+  const [allQuestions, historyRows, practiceRows, bookmarkRows] = await Promise.all([
+    // 1. All question IDs for exam
+    db.select({ id: questions.id }).from(questions).where(eq(questions.examId, examId)),
+
+    // 2. Exam session history with correctCount, lastAnsweredAt, lastWasCorrect
+    db
+      .select({
+        questionId: examSessionQuestions.questionId,
+        pickCount: count(),
+        errorCount:
+          sql<number>`SUM(CASE WHEN ${examSessionQuestions.isCorrect} = 0 THEN 1 ELSE 0 END)`.as(
+            "error_count"
+          ),
+        correctCount:
+          sql<number>`SUM(CASE WHEN ${examSessionQuestions.isCorrect} = 1 THEN 1 ELSE 0 END)`.as(
+            "correct_count"
+          ),
+        answeredCount:
+          sql<number>`SUM(CASE WHEN ${examSessionQuestions.isCorrect} IS NOT NULL THEN 1 ELSE 0 END)`.as(
+            "answered_count"
+          ),
+        lastAnsweredAt:
+          sql<string>`MAX(${examSessions.completedAt})`.as("last_answered_at"),
+        lastWasCorrect: sql<number>`(
+          SELECT esq2.is_correct FROM exam_session_questions esq2
+          INNER JOIN exam_sessions es2 ON esq2.session_id = es2.id
+          WHERE esq2.question_id = ${examSessionQuestions.questionId}
+            AND es2.user_id = ${userId}
+            AND es2.exam_id = ${examId}
+            AND esq2.is_correct IS NOT NULL
+            AND es2.completed_at IS NOT NULL
+          ORDER BY es2.completed_at DESC
+          LIMIT 1
+        )`.as("last_was_correct"),
+      })
+      .from(examSessionQuestions)
+      .innerJoin(examSessions, eq(examSessionQuestions.sessionId, examSessions.id))
+      .where(and(eq(examSessions.userId, userId), eq(examSessions.examId, examId)))
+      .groupBy(examSessionQuestions.questionId),
+
+    // 3. Practice mode history from user_progress
+    db
+      .select({
+        questionId: userProgress.questionId,
+        isCorrect: userProgress.isCorrect,
+        attemptedAt: userProgress.attemptedAt,
+      })
+      .from(userProgress)
+      .innerJoin(questions, eq(userProgress.questionId, questions.id))
+      .where(
+        and(eq(userProgress.userId, userId), eq(questions.examId, examId))
+      ),
+
+    // 4. Bookmarked questions
+    db
+      .select({ questionId: bookmarks.questionId })
+      .from(bookmarks)
+      .innerJoin(questions, eq(bookmarks.questionId, questions.id))
+      .where(
+        and(eq(bookmarks.userId, userId), eq(questions.examId, examId))
+      ),
+  ]);
 
   const allIds = allQuestions.map((q) => q.id);
 
   if (allIds.length <= numToSelect) {
-    // Shuffle and return all
     return shuffleArray(allIds);
   }
 
-  // Get pick_count and error_count from past sessions
-  const historyRows = await db
-    .select({
-      questionId: examSessionQuestions.questionId,
-      pickCount: count(),
-      errorCount:
-        sql<number>`SUM(CASE WHEN ${examSessionQuestions.isCorrect} = 0 THEN 1 ELSE 0 END)`.as(
-          "error_count"
-        ),
-      answeredCount:
-        sql<number>`SUM(CASE WHEN ${examSessionQuestions.isCorrect} IS NOT NULL THEN 1 ELSE 0 END)`.as(
-          "answered_count"
-        ),
-    })
-    .from(examSessionQuestions)
-    .innerJoin(examSessions, eq(examSessionQuestions.sessionId, examSessions.id))
-    .where(and(eq(examSessions.userId, userId), eq(examSessions.examId, examId)))
-    .groupBy(examSessionQuestions.questionId);
-
-  const historyMap = new Map(
+  // Build lookup maps
+  const examHistoryMap = new Map(
     historyRows.map((r) => [
       r.questionId,
       {
         pickCount: r.pickCount,
         errorCount: r.errorCount ?? 0,
+        correctCount: r.correctCount ?? 0,
         answeredCount: r.answeredCount ?? 0,
+        lastAnsweredAt: r.lastAnsweredAt,
+        lastWasCorrect: r.lastWasCorrect === 1,
       },
     ])
   );
 
+  const practiceMap = new Map(
+    practiceRows.map((r) => [
+      r.questionId,
+      { isCorrect: r.isCorrect, attemptedAt: r.attemptedAt },
+    ])
+  );
+
+  const bookmarkSet = new Set(bookmarkRows.map((r) => r.questionId));
+
+  const now = Date.now();
+
   // Calculate weights
   type WeightedItem = { id: number; weight: number };
   const weighted: WeightedItem[] = allIds.map((id) => {
-    const history = historyMap.get(id);
-    if (!history) {
-      // Never attempted: weight = 4.0
-      return { id, weight: 4.0 };
+    const exam = examHistoryMap.get(id);
+    const practice = practiceMap.get(id);
+    const isBookmarked = bookmarkSet.has(id);
+
+    // W_new: boost unseen questions
+    const neverAttempted = !exam && !practice;
+    const wNew = neverAttempted ? WEIGHT_CONFIG.NEW_BONUS : 0;
+
+    // W_error: capped absolute error count
+    const errorCount = exam?.errorCount ?? 0;
+    const wError =
+      Math.min(errorCount, WEIGHT_CONFIG.ERROR_COUNT_CAP) * WEIGHT_CONFIG.ERROR_COUNT_FACTOR;
+
+    // W_errorRate: proportional wrongness
+    const answeredCount = exam?.answeredCount ?? 0;
+    const errorRate = answeredCount > 0 ? errorCount / answeredCount : 0;
+    const wErrorRate = errorRate * WEIGHT_CONFIG.ERROR_RATE_FACTOR;
+
+    // W_frequency: decay for frequently picked
+    const pickCount = exam?.pickCount ?? 0;
+    const wFrequency = 1.0 / (pickCount + 1);
+
+    // W_bookmark
+    const wBookmark = isBookmarked ? WEIGHT_CONFIG.BOOKMARK_BONUS : 0;
+
+    // W_forgetting: Ebbinghaus curve
+    let wForgetting = 0;
+    if (exam || practice) {
+      // Find most recent review timestamp from either source
+      let lastReviewMs = 0;
+      if (exam?.lastAnsweredAt) {
+        const ts = exam.lastAnsweredAt.endsWith("Z")
+          ? exam.lastAnsweredAt
+          : exam.lastAnsweredAt + "Z";
+        lastReviewMs = Math.max(lastReviewMs, new Date(ts).getTime());
+      }
+      if (practice?.attemptedAt) {
+        const ts = practice.attemptedAt.endsWith("Z")
+          ? practice.attemptedAt
+          : practice.attemptedAt + "Z";
+        lastReviewMs = Math.max(lastReviewMs, new Date(ts).getTime());
+      }
+
+      if (lastReviewMs > 0) {
+        const daysSince = (now - lastReviewMs) / (1000 * 60 * 60 * 24);
+        const correctCount = exam?.correctCount ?? 0;
+        const totalAnswered = exam?.answeredCount ?? 0;
+        const correctRate = totalAnswered > 0 ? correctCount / totalAnswered : 0;
+
+        // Determine lastWasCorrect from whichever source is more recent
+        let lastWasCorrect = true;
+        if (exam?.lastAnsweredAt && practice?.attemptedAt) {
+          const examTs = exam.lastAnsweredAt.endsWith("Z")
+            ? exam.lastAnsweredAt
+            : exam.lastAnsweredAt + "Z";
+          const practiceTs = practice.attemptedAt.endsWith("Z")
+            ? practice.attemptedAt
+            : practice.attemptedAt + "Z";
+          lastWasCorrect =
+            new Date(practiceTs).getTime() > new Date(examTs).getTime()
+              ? practice.isCorrect
+              : exam.lastWasCorrect;
+        } else if (practice) {
+          lastWasCorrect = practice.isCorrect;
+        } else if (exam) {
+          lastWasCorrect = exam.lastWasCorrect;
+        }
+
+        const forgetting = calculateForgettingFactor(
+          daysSince,
+          correctRate,
+          totalAnswered,
+          lastWasCorrect
+        );
+        wForgetting = forgetting * WEIGHT_CONFIG.FORGETTING_FACTOR;
+      }
     }
-    const errorRate =
-      history.answeredCount > 0 ? history.errorCount / history.answeredCount : 0;
-    const weight = 1.0 + 1.0 / (history.pickCount + 1) + errorRate * 2.0;
+
+    const weight =
+      WEIGHT_CONFIG.BASE + wNew + wError + wErrorRate + wFrequency + wBookmark + wForgetting;
+
     return { id, weight };
   });
 
