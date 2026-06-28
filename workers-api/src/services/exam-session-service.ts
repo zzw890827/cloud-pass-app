@@ -2,6 +2,7 @@ import { eq, and, sql, count, inArray, desc, asc } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   exams,
+  examDomains,
   questions,
   options,
   examSessions,
@@ -50,16 +51,121 @@ function calculateForgettingFactor(
   return 1 - retention;
 }
 
+// Weighted random sampling without replacement.
+function weightedSampleWithoutReplacement(
+  items: { id: number; weight: number }[],
+  n: number
+): number[] {
+  const selected: number[] = [];
+  const remaining = [...items];
+  const target = Math.min(n, remaining.length);
+
+  for (let i = 0; i < target; i++) {
+    const totalWeight = remaining.reduce((sum, item) => sum + item.weight, 0);
+    let random = Math.random() * totalWeight;
+
+    // Default to the last item to stay robust against floating-point drift
+    // (e.g. if accumulated subtraction never quite crosses zero).
+    let picked = remaining.length - 1;
+    for (let j = 0; j < remaining.length; j++) {
+      random -= remaining[j].weight;
+      if (random <= 0) {
+        picked = j;
+        break;
+      }
+    }
+    selected.push(remaining[picked].id);
+    remaining.splice(picked, 1);
+  }
+
+  return selected;
+}
+
+// Allocate `total` slots across keyed buckets proportionally to weight, capped at
+// each bucket's capacity, redistributing any overflow to buckets that still have
+// room. Always allocates exactly min(total, sum(caps)) and always terminates.
+function allocateByWeightWithCaps(
+  entries: { key: number; weight: number; cap: number }[],
+  total: number
+): Map<number, number> {
+  const alloc = new Map<number, number>(entries.map((e) => [e.key, 0]));
+  const totalCap = entries.reduce((s, e) => s + e.cap, 0);
+  let remaining = Math.min(total, totalCap);
+  let active = entries.filter((e) => e.cap > 0);
+
+  while (remaining > 0 && active.length > 0) {
+    const wsum = active.reduce((s, e) => s + Math.max(e.weight, 0), 0);
+
+    if (wsum <= 0) {
+      // No usable weights — fall back to round-robin so progress is guaranteed.
+      for (const e of active) {
+        if (remaining <= 0) break;
+        if ((alloc.get(e.key) ?? 0) < e.cap) {
+          alloc.set(e.key, (alloc.get(e.key) ?? 0) + 1);
+          remaining--;
+        }
+      }
+      active = active.filter((e) => (alloc.get(e.key) ?? 0) < e.cap);
+      continue;
+    }
+
+    // Proportional pass (floor), capped at remaining room per bucket.
+    let passAllocated = 0;
+    const remainders: { key: number; cap: number; frac: number }[] = [];
+    for (const e of active) {
+      const ideal = (remaining * Math.max(e.weight, 0)) / wsum;
+      const room = e.cap - (alloc.get(e.key) ?? 0);
+      const give = Math.min(Math.floor(ideal), room);
+      if (give > 0) {
+        alloc.set(e.key, (alloc.get(e.key) ?? 0) + give);
+        passAllocated += give;
+      }
+      if (give < room) {
+        remainders.push({ key: e.key, cap: e.cap, frac: ideal - Math.floor(ideal) });
+      }
+    }
+    remaining -= passAllocated;
+
+    // Hand out the leftover by largest fractional remainder, +1 each, respecting caps.
+    remainders.sort((a, b) => b.frac - a.frac);
+    for (const r of remainders) {
+      if (remaining <= 0) break;
+      if ((alloc.get(r.key) ?? 0) < r.cap) {
+        alloc.set(r.key, (alloc.get(r.key) ?? 0) + 1);
+        remaining--;
+      }
+    }
+
+    // Guarantee forward progress if a pass allocated nothing (all ideals < 1).
+    if (passAllocated === 0 && remaining > 0) {
+      for (const e of active) {
+        if (remaining <= 0) break;
+        if ((alloc.get(e.key) ?? 0) < e.cap) {
+          alloc.set(e.key, (alloc.get(e.key) ?? 0) + 1);
+          remaining--;
+        }
+      }
+    }
+
+    active = active.filter((e) => (alloc.get(e.key) ?? 0) < e.cap);
+  }
+
+  return alloc;
+}
+
 async function selectWeightedQuestions(
   db: Database,
   examId: number,
   userId: number,
   numToSelect: number
 ): Promise<number[]> {
-  // 4 parallel queries
-  const [allQuestions, historyRows, practiceRows, bookmarkRows] = await Promise.all([
-    // 1. All question IDs for exam
-    db.select({ id: questions.id }).from(questions).where(eq(questions.examId, examId)),
+  // 5 parallel queries
+  const [allQuestions, historyRows, practiceRows, bookmarkRows, domainRows] = await Promise.all([
+    // 1. All question IDs (+ domain) for exam
+    db
+      .select({ id: questions.id, domainId: questions.domainId })
+      .from(questions)
+      .where(eq(questions.examId, examId)),
 
     // 2. Exam session history with correctCount, lastAnsweredAt, lastWasCorrect
     db
@@ -118,6 +224,13 @@ async function selectWeightedQuestions(
       .where(
         and(eq(bookmarks.userId, userId), eq(questions.examId, examId))
       ),
+
+    // 5. Content domains for this exam (weights drive per-domain quotas)
+    db
+      .select({ id: examDomains.id, weight: examDomains.weight })
+      .from(examDomains)
+      .where(eq(examDomains.examId, examId))
+      .orderBy(examDomains.orderIndex),
   ]);
 
   const allIds = allQuestions.map((q) => q.id);
@@ -239,25 +352,54 @@ async function selectWeightedQuestions(
     return { id, weight };
   });
 
-  // Weighted random sampling without replacement
-  const selected: number[] = [];
-  const remaining = [...weighted];
+  // No domains configured → global weighted selection (backward compatible).
+  if (domainRows.length === 0) {
+    return weightedSampleWithoutReplacement(weighted, numToSelect);
+  }
 
-  for (let i = 0; i < numToSelect; i++) {
-    const totalWeight = remaining.reduce((sum, item) => sum + item.weight, 0);
-    let random = Math.random() * totalWeight;
+  // Domain-aware selection: domain weights set per-domain quotas; the scoring
+  // above decides which specific questions fill each quota.
+  const weightById = new Map(weighted.map((w) => [w.id, w.weight]));
+  const itemsByDomain = new Map<number, { id: number; weight: number }[]>();
+  const unassigned: { id: number; weight: number }[] = [];
 
-    for (let j = 0; j < remaining.length; j++) {
-      random -= remaining[j].weight;
-      if (random <= 0) {
-        selected.push(remaining[j].id);
-        remaining.splice(j, 1);
-        break;
-      }
+  for (const q of allQuestions) {
+    const item = { id: q.id, weight: weightById.get(q.id) ?? WEIGHT_CONFIG.BASE };
+    if (q.domainId != null) {
+      const bucket = itemsByDomain.get(q.domainId);
+      if (bucket) bucket.push(item);
+      else itemsByDomain.set(q.domainId, [item]);
+    } else {
+      unassigned.push(item);
     }
   }
 
-  return selected;
+  // Allocate quotas across domains proportionally to weight, capped at how many
+  // questions each domain actually has (under-filled domains redistribute).
+  const quotaByDomain = allocateByWeightWithCaps(
+    domainRows.map((d) => ({
+      key: d.id,
+      weight: d.weight,
+      cap: itemsByDomain.get(d.id)?.length ?? 0,
+    })),
+    numToSelect
+  );
+
+  const selected: number[] = [];
+  for (const [domainId, items] of itemsByDomain) {
+    const quota = quotaByDomain.get(domainId) ?? 0;
+    if (quota > 0) selected.push(...weightedSampleWithoutReplacement(items, quota));
+  }
+
+  // Fill any shortfall (rounding, under-capacity domains, or questions with no
+  // domain) from the unassigned pool so the session always reaches numToSelect.
+  const shortfall = numToSelect - selected.length;
+  if (shortfall > 0 && unassigned.length > 0) {
+    selected.push(...weightedSampleWithoutReplacement(unassigned, shortfall));
+  }
+
+  // Mix domains together so questions aren't clustered by domain.
+  return shuffleArray(selected);
 }
 
 function shuffleArray<T>(arr: T[]): T[] {
