@@ -1,7 +1,8 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { providers, exams, questions, options } from "../db/schema";
+import { providers, exams, examDomains, questions, options } from "../db/schema";
 import type { ImportPayload } from "../schemas/import";
+import { AppError } from "../lib/errors";
 
 export async function importQuestions(db: Database, data: ImportPayload) {
   // Upsert provider by slug
@@ -64,6 +65,36 @@ export async function importQuestions(db: Database, data: ImportPayload) {
     exam = created;
   }
 
+  // Upsert content domains (by exam_id + code) and build a code -> id lookup.
+  // Pre-load existing domains so questions can reference domains that were
+  // declared in a previous import without re-declaring them here.
+  const domainByCode = new Map<string, number>();
+  const existingDomains = await db
+    .select({ id: examDomains.id, code: examDomains.code })
+    .from(examDomains)
+    .where(eq(examDomains.examId, exam.id));
+  for (const d of existingDomains) domainByCode.set(d.code, d.id);
+
+  if (data.exam.domains?.length) {
+    for (let i = 0; i < data.exam.domains.length; i++) {
+      const d = data.exam.domains[i];
+      const orderIndex = d.order_index ?? i;
+      const existingId = domainByCode.get(d.code);
+      if (existingId !== undefined) {
+        await db
+          .update(examDomains)
+          .set({ name: d.name, weight: d.weight, orderIndex })
+          .where(eq(examDomains.id, existingId));
+      } else {
+        const [created] = await db
+          .insert(examDomains)
+          .values({ examId: exam.id, code: d.code, name: d.name, weight: d.weight, orderIndex })
+          .returning();
+        domainByCode.set(d.code, created.id);
+      }
+    }
+  }
+
   // Get existing question external_ids for this exam
   const existingQuestions = await db
     .select({ externalId: questions.externalId })
@@ -77,7 +108,27 @@ export async function importQuestions(db: Database, data: ImportPayload) {
   let currentOrderIndex = existingIds.size;
 
   for (const q of data.exam.questions) {
+    // Resolve & validate the question's domain (if any) against declared domains.
+    let domainId: number | null = null;
+    if (q.domain) {
+      const resolved = domainByCode.get(q.domain);
+      if (resolved === undefined) {
+        throw new AppError(
+          422,
+          `Question "${q.external_id}" references unknown domain "${q.domain}". Declare it in exam.domains.`
+        );
+      }
+      domainId = resolved;
+    }
+
     if (existingIds.has(q.external_id)) {
+      // Backfill the domain on a previously-imported question when provided.
+      if (q.domain) {
+        await db
+          .update(questions)
+          .set({ domainId })
+          .where(and(eq(questions.examId, exam.id), eq(questions.externalId, q.external_id)));
+      }
       questionsSkipped++;
       continue;
     }
@@ -88,6 +139,7 @@ export async function importQuestions(db: Database, data: ImportPayload) {
       .insert(questions)
       .values({
         examId: exam.id,
+        domainId,
         externalId: q.external_id,
         questionText: q.text,
         questionType: q.type,

@@ -11,7 +11,15 @@ export const importQuestionSchema = z.object({
   text: z.string(),
   type: z.enum(["single", "multi"]),
   explanation: z.string().optional().nullable(),
+  domain: z.string().optional().nullable(), // references a domain `code` declared on the exam
   options: z.array(importOptionSchema).min(2),
+});
+
+export const importDomainSchema = z.object({
+  code: z.string(), // stable per-exam key referenced by questions
+  name: z.string(),
+  weight: z.number().int().nonnegative(), // relative weight, normalized at selection time
+  order_index: z.number().int().optional(),
 });
 
 export const importExamSchema = z.object({
@@ -21,6 +29,7 @@ export const importExamSchema = z.object({
   num_questions: z.number().int().optional(),
   pass_percentage: z.number().int().optional(),
   time_limit_minutes: z.number().int().optional(),
+  domains: z.array(importDomainSchema).optional(),
   questions: z.array(importQuestionSchema),
 });
 
