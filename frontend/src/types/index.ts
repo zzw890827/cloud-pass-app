@@ -140,6 +140,15 @@ export interface ImportResult {
   questions_skipped: number;
 }
 
+// Admin — delete exam
+export interface DeleteExamResult {
+  exam_id: number;
+  code: string;
+  name: string;
+  questions_deleted: number;
+  sessions_deleted: number;
+}
+
 // Exam Session
 export interface ExamSessionQuestionListItem {
   id: number;
