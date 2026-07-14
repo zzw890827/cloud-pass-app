@@ -148,6 +148,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  deleteExam: (id: number) =>
+    request<import("@/types").DeleteExamResult>(`/admin/exams/${id}`, {
+      method: "DELETE",
+    }),
 };
 
 export { ApiError };
