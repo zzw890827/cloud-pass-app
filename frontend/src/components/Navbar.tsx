@@ -28,9 +28,14 @@ export default function Navbar() {
                   Review
                 </Link>
                 {user.is_admin && (
-                  <Link href="/admin/import" className="text-sm text-gray-600 hover:text-gray-900">
-                    Import
-                  </Link>
+                  <>
+                    <Link href="/admin/import" className="text-sm text-gray-600 hover:text-gray-900">
+                      Import
+                    </Link>
+                    <Link href="/admin/maintenance" className="text-sm text-gray-600 hover:text-gray-900">
+                      Maintenance
+                    </Link>
+                  </>
                 )}
               </div>
             )}
@@ -72,9 +77,14 @@ export default function Navbar() {
               Review
             </Link>
             {user.is_admin && (
-              <Link href="/admin/import" onClick={closeMenu} className="block px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
-                Import
-              </Link>
+              <>
+                <Link href="/admin/import" onClick={closeMenu} className="block px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
+                  Import
+                </Link>
+                <Link href="/admin/maintenance" onClick={closeMenu} className="block px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
+                  Maintenance
+                </Link>
+              </>
             )}
             <div className="border-t border-gray-100 pt-2 mt-2">
               <span className="block px-3 py-1 text-xs text-gray-400">{user.display_name}</span>
