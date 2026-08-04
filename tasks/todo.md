@@ -41,3 +41,20 @@
 - [x] IMPORTANT: Added input validation on session/question submit routes
 - [x] IMPORTANT: Added NaN guard on exam_id query params
 - [x] MINOR: Removed unused sql import from providers.ts
+
+## Exam Mode: Submit button for single-choice questions
+Problem: in exam mode a single-choice answer was auto-submitted and locked the
+instant an option was clicked — a misclick was unrecoverable.
+
+- [x] Remove the single-choice auto-submit effect from `ExamQuestionCard`
+- [x] Show the `Lock Answer` button for every question type, not just multi
+- [x] Add a hint that the selection stays editable until locked
+- [x] Ignore option clicks while a submit is in flight (locked answer always
+      matches the displayed selection)
+- [x] Verify: `tsc --noEmit` clean, no new eslint findings
+- [x] Verify: 25/25 headless-Chrome checks (select → change → lock → revisit,
+      single and multi), answer persisted via the API
+
+### Review
+Single- and multi-choice now share one path: pick freely, then `Lock Answer`.
+Locking is still one-way per question — only the pre-lock auto-submit is gone.
