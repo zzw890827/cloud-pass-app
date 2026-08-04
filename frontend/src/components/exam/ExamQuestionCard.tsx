@@ -48,7 +48,8 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
   }, [selected, submitting, submitted, question.session_question_id, onSubmit]);
 
   const toggleOption = (optionId: number) => {
-    if (submitted) return;
+    // Also blocked while submitting, so the locked answer always matches what is shown
+    if (submitted || submitting) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (isMulti) {
@@ -60,21 +61,6 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
       return next;
     });
   };
-
-  // Auto-submit for single choice (no answer reveal)
-  const pendingAutoSubmit = useRef(false);
-  useEffect(() => {
-    if (!isMulti && selected.size === 1 && !submitted && !submitting && !question.selected_option_ids) {
-      pendingAutoSubmit.current = true;
-    }
-  }, [selected, isMulti, submitted, submitting, question.selected_option_ids]);
-
-  useEffect(() => {
-    if (pendingAutoSubmit.current) {
-      pendingAutoSubmit.current = false;
-      handleSubmit();
-    }
-  }, [selected, handleSubmit]);
 
   const getOptionStyle = (optionId: number) => {
     const base = "w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-all text-sm";
@@ -107,7 +93,7 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
             key={opt.id}
             className={getOptionStyle(opt.id)}
             onClick={() => toggleOption(opt.id)}
-            disabled={submitted}
+            disabled={submitted || submitting}
           >
             <span className="font-semibold mr-2">{opt.label}.</span>
             <MarkdownRenderer content={opt.option_text} compact />
@@ -115,10 +101,15 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
         ))}
       </div>
 
-      {isMulti && !submitted && (
-        <Button onClick={handleSubmit} disabled={selected.size === 0 || submitting}>
-          {submitting ? "Submitting..." : "Lock Answer"}
-        </Button>
+      {!submitted && (
+        <div className="flex items-center gap-3">
+          <Button onClick={handleSubmit} disabled={selected.size === 0 || submitting}>
+            {submitting ? "Submitting..." : "Lock Answer"}
+          </Button>
+          <p className="text-sm text-gray-500">
+            You can change your selection until you lock the answer.
+          </p>
+        </div>
       )}
 
       {submitted && (
