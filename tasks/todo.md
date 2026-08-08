@@ -58,3 +58,36 @@ instant an option was clicked — a misclick was unrecoverable.
 ### Review
 Single- and multi-choice now share one path: pick freely, then `Lock Answer`.
 Locking is still one-way per question — only the pre-lock auto-submit is gone.
+
+## Exam History: Never-drawn questions panel
+Goal: on the exam history page, list the questions in the bank that have never
+been drawn into any of the user's exam sessions, so gaps in coverage are visible.
+
+- [x] Service `getUnusedQuestions` — exam-scoped, user-scoped, NOT IN sub-query
+      (no JS id array, so D1's bound-parameter limit is never in play)
+- [x] Route `GET /exam-sessions/unused-questions?exam_id=X`, declared before `/:id`
+- [x] Bound the payload: 200-char `question_preview` via SQL `substr`, at most
+      200 rows, with an exact `unused_count` alongside
+- [x] `UnusedQuestionsList` component — count + coverage %, 20 rows then
+      "Show all", each row deep-links to `/practice?questionId=`
+- [x] History page fetches the panel separately so its failure cannot blank the
+      page; exam-tagged state so a change of `examId` can't render stale data
+- [x] Verify: API output matches raw SQL for the empty / partial / full cases,
+      abandoned and in-progress sessions count as a draw, 400 without exam_id,
+      404 for an unknown exam
+- [x] Verify: headless Chrome — all three UI states, "Show all" toggle, capped
+      notice, row navigation lands on the right question, and a forced 500 on
+      the new endpoint leaves the rest of the page intact
+- [x] Verify: `tsc --noEmit` and eslint clean in both packages
+
+### Review
+Two review rounds. Round 1: the new fetch was inside the page's `Promise.all`,
+so an API-before-frontend deploy would have blanked every history page — split
+out; and the response shipped full question texts for the whole bank — replaced
+with previews. Round 2: sticky error state across `examId` changes — state is
+now tagged with the exam it belongs to; and row count was still unbounded —
+capped at 200 with an exact count and a UI notice.
+
+Known limitation (pre-existing, unchanged here): the practice page only loads
+the first 200 questions when following `?questionId=`, so deep links past that
+point land on question 1. Already fixed on `main`; out of scope for this branch.

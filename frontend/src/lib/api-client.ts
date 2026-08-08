@@ -141,6 +141,10 @@ export const api = {
     request<import("@/types").ExamErrorReport>(
       `/exam-sessions/error-report?exam_id=${examId}`
     ),
+  getUnusedQuestions: (examId: number) =>
+    request<import("@/types").ExamUnusedQuestions>(
+      `/exam-sessions/unused-questions?exam_id=${examId}`
+    ),
 
   // Admin
   importData: (data: unknown) =>

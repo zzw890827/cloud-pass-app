@@ -1,4 +1,4 @@
-import { eq, and, sql, count, inArray, desc, asc } from "drizzle-orm";
+import { eq, and, sql, count, inArray, notInArray, desc, asc } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   exams,
@@ -718,6 +718,73 @@ export async function getErrorReport(db: Database, userId: number, examId: numbe
       error_count: r.errorCount,
       attempt_count: r.attemptCount,
       error_rate: r.attemptCount > 0 ? r.errorCount / r.attemptCount : 0,
+    })),
+  };
+}
+
+// Characters of question text returned per unused question — enough to
+// recognise it in a list without shipping the whole bank.
+const PREVIEW_LENGTH = 200;
+
+// Upper bound on returned rows — a user who never sat an exam has the whole
+// bank unused, and the UI only lists them. `unused_count` stays exact.
+const MAX_UNUSED_ITEMS = 200;
+
+/**
+ * Questions of an exam that have never been drawn into any of the user's exam
+ * sessions (regardless of session status — being drawn counts even if the
+ * session was abandoned or is still in progress). Practice-mode answers do not
+ * count as a draw.
+ */
+export async function getUnusedQuestions(db: Database, userId: number, examId: number) {
+  const exam = await db.query.exams.findFirst({
+    where: eq(exams.id, examId),
+  });
+  if (!exam) throw new AppError(404, "Exam not found");
+
+  // Sub-query instead of a JS id array: keeps the statement inside D1's
+  // bound-parameter limit no matter how large the question bank is.
+  const usedQuestionIds = db
+    .select({ questionId: examSessionQuestions.questionId })
+    .from(examSessionQuestions)
+    .innerJoin(examSessions, eq(examSessionQuestions.sessionId, examSessions.id))
+    .where(and(eq(examSessions.userId, userId), eq(examSessions.examId, examId)));
+
+  const isUnused = and(
+    eq(questions.examId, examId),
+    notInArray(questions.id, usedQuestionIds)
+  );
+
+  const rows = await db
+    .select({
+      id: questions.id,
+      externalId: questions.externalId,
+      // Preview only — the whole bank can be unused, so never ship full texts.
+      preview: sql<string>`substr(${questions.questionText}, 1, ${PREVIEW_LENGTH})`,
+    })
+    .from(questions)
+    .where(isUnused)
+    .orderBy(asc(questions.orderIndex), asc(questions.id))
+    .limit(MAX_UNUSED_ITEMS);
+
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(questions)
+    .where(eq(questions.examId, examId));
+
+  const [unusedRow] = await db
+    .select({ total: count() })
+    .from(questions)
+    .where(isUnused);
+
+  return {
+    exam_id: exam.id,
+    total_questions: totalRow?.total ?? 0,
+    unused_count: unusedRow?.total ?? 0,
+    items: rows.map((r) => ({
+      question_id: r.id,
+      external_id: r.externalId,
+      question_preview: r.preview,
     })),
   };
 }
