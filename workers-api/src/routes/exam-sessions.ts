@@ -14,6 +14,7 @@ import {
   getSessionResult,
   getSessionHistory,
   getErrorReport,
+  getUnusedQuestions,
 } from "../services/exam-session-service";
 
 const sessionRoutes = new Hono<AppEnv>();
@@ -65,6 +66,16 @@ sessionRoutes.get("/error-report", async (c) => {
   const examId = requireExamIdQuery(c);
 
   const result = await getErrorReport(db, user.id, examId);
+  return c.json(result);
+});
+
+// GET /exam-sessions/unused-questions?exam_id=X
+sessionRoutes.get("/unused-questions", async (c) => {
+  const db = c.get("db");
+  const user = c.get("user");
+  const examId = requireExamIdQuery(c);
+
+  const result = await getUnusedQuestions(db, user.id, examId);
   return c.json(result);
 });
 

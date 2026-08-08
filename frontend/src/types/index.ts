@@ -261,3 +261,17 @@ export interface ExamErrorReport {
   exam_id: number;
   items: QuestionErrorFrequency[];
 }
+
+export interface UnusedQuestionItem {
+  question_id: number;
+  external_id: string;
+  question_preview: string;
+}
+
+export interface ExamUnusedQuestions {
+  exam_id: number;
+  total_questions: number;
+  /** Exact number of never-drawn questions — `items` may be capped below this. */
+  unused_count: number;
+  items: UnusedQuestionItem[];
+}
