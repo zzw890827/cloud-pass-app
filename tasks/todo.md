@@ -91,3 +91,38 @@ capped at 200 with an exact count and a UI notice.
 Known limitation (pre-existing, unchanged here): the practice page only loads
 the first 200 questions when following `?questionId=`, so deep links past that
 point land on question 1. Already fixed on `main`; out of scope for this branch.
+
+## Provider-aware theme: Anthropic exams turn orange
+Goal: opening an Anthropic exam repaints the app in Anthropic's orange; every
+other provider keeps the existing blue.
+
+- [x] `globals.css`: an `accent` palette as design tokens (`@theme static`, so
+      the variables survive pruning for the charts that read them from SVG
+      attributes), defaulting to the current blue
+- [x] `[data-provider="anthropic"]` scope overrides those variables — an
+      unlayered rule, so it wins over `@layer theme` regardless of specificity
+- [x] Replace the 25 hardcoded `blue-*` utilities across 14 files with
+      `accent-*`; `Badge`'s `blue` variant renamed `accent`; chart `stroke`/
+      `fill` read `var(--color-accent-*)`
+- [x] `ProviderTheme` client component (rendered by the exam layout, which stays
+      a server component) sets `data-provider` on `<html>`, with a module-level
+      examId→slug cache so navigation inside an exam neither re-fetches nor
+      flashes, and applied before paint on a cache hit
+- [x] Backend: `provider_slug` on both `GET /exams` and `GET /exams/:id`
+- [x] Verify: Chrome — AWS exam still blue, Anthropic exam orange across
+      overview / practice / exam session / history, theme cleared on leaving the
+      exam section, `--color-accent-600` reads #a94f33 vs #2563eb
+- [x] Verify: `tsc --noEmit` and eslint clean in both packages
+
+### Review
+Two rounds. Round 1: the brand orange #d97757 failed WCAG AA in six places the
+blue had passed (white-on-button 4.23, links 4.23, rings 2.61) — the 500/600/700
+steps were darkened to #c96343/#a94f33/#8a3f28, all combinations now ≥ AA; a
+plain `@theme` would have pruned the variables the charts read; every exam
+sub-page paid an extra `/exams/:id` round trip. Round 2: passive effects run
+after paint, so even a cache hit flashed the default palette for one frame —
+the cached path moved to a layout effect, and the cleanup no longer wipes the
+attribute on every examId change, only when the exam section is left.
+
+Known trade-off: the very first exam page of a session still repaints once the
+API answers; removing that would mean resolving the provider server-side.

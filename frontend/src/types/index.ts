@@ -39,6 +39,7 @@ export interface Exam {
   total_questions: number;
   is_active: boolean;
   provider_name: string;
+  provider_slug: string;
   num_questions: number;
   pass_percentage: number;
   time_limit_minutes: number;

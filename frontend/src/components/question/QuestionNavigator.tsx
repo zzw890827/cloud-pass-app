@@ -76,7 +76,7 @@ export default function QuestionNavigator({ questions, currentIndex, onSelect, t
             bg = "bg-yellow-100 text-yellow-700 hover:bg-yellow-200";
           }
           if (isCurrent) {
-            bg += " ring-2 ring-blue-500";
+            bg += " ring-2 ring-accent-500";
           }
 
           return (
