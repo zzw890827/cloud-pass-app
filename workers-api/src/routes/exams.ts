@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import type { AppEnv } from "../types/env";
-import { exams, providers, examSessions } from "../db/schema";
+import { exams, examDomains, questions, providers, examSessions } from "../db/schema";
 import { getProgressSummary } from "../services/progress-service";
 import { AppError } from "../lib/errors";
 
@@ -25,6 +25,7 @@ examRoutes.get("/", async (c) => {
       passPercentage: exams.passPercentage,
       timeLimitMinutes: exams.timeLimitMinutes,
       providerName: providers.name,
+      providerSlug: providers.slug,
     })
     .from(exams)
     .innerJoin(providers, eq(exams.providerId, providers.id))
@@ -47,6 +48,7 @@ examRoutes.get("/", async (c) => {
       pass_percentage: r.passPercentage,
       time_limit_minutes: r.timeLimitMinutes,
       provider_name: r.providerName,
+      provider_slug: r.providerSlug,
     }))
   );
 });
@@ -70,6 +72,7 @@ examRoutes.get("/:id", async (c) => {
       passPercentage: exams.passPercentage,
       timeLimitMinutes: exams.timeLimitMinutes,
       providerName: providers.name,
+      providerSlug: providers.slug,
     })
     .from(exams)
     .innerJoin(providers, eq(exams.providerId, providers.id))
@@ -79,6 +82,21 @@ examRoutes.get("/:id", async (c) => {
   const exam = rows[0];
 
   const progressSummary = await getProgressSummary(db, examId, user.id);
+
+  // Content domains (with per-domain question counts). Empty for exams without domains.
+  const domainRows = await db
+    .select({
+      id: examDomains.id,
+      code: examDomains.code,
+      name: examDomains.name,
+      weight: examDomains.weight,
+      questionCount: count(questions.id),
+    })
+    .from(examDomains)
+    .leftJoin(questions, eq(questions.domainId, examDomains.id))
+    .where(eq(examDomains.examId, examId))
+    .groupBy(examDomains.id)
+    .orderBy(examDomains.orderIndex);
 
   // Find active session
   const activeSession = await db.query.examSessions.findFirst({
@@ -101,8 +119,16 @@ examRoutes.get("/:id", async (c) => {
     pass_percentage: exam.passPercentage,
     time_limit_minutes: exam.timeLimitMinutes,
     provider_name: exam.providerName,
+    provider_slug: exam.providerSlug,
     progress_summary: progressSummary,
     active_session_id: activeSession?.id ?? null,
+    domains: domainRows.map((d) => ({
+      id: d.id,
+      code: d.code,
+      name: d.name,
+      weight: d.weight,
+      question_count: d.questionCount,
+    })),
   });
 });
 

@@ -50,7 +50,7 @@ export default function UnusedQuestionsList({ report, examId }: UnusedQuestionsL
               href={`/exams/${examId}/practice?questionId=${item.question_id}`}
               className="py-2 px-1 flex gap-3 items-start hover:bg-gray-50"
             >
-              <span className="w-20 shrink-0 truncate text-xs font-medium text-blue-600 underline mt-0.5">
+              <span className="w-20 shrink-0 truncate text-xs font-medium text-accent-600 underline mt-0.5">
                 {item.external_id}
               </span>
               <span className="min-w-0 flex-1 text-sm text-gray-600 line-clamp-2">
@@ -64,7 +64,7 @@ export default function UnusedQuestionsList({ report, examId }: UnusedQuestionsL
       {report.items.length > INITIAL_VISIBLE && (
         <button
           type="button"
-          className="mt-3 text-sm text-blue-600 hover:underline cursor-pointer"
+          className="mt-3 text-sm text-accent-600 hover:underline cursor-pointer"
           onClick={() => setExpanded((v) => !v)}
         >
           {expanded ? "Show less" : `Show all ${report.items.length} questions`}

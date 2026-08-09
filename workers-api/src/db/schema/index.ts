@@ -1,6 +1,7 @@
 export { users } from "./users";
 export { providers } from "./providers";
 export { exams } from "./exams";
+export { examDomains } from "./exam-domains";
 export { questions } from "./questions";
 export { options } from "./options";
 export { userProgress } from "./user-progress";

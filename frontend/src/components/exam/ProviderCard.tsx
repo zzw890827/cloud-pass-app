@@ -17,7 +17,7 @@ export default function ProviderCard({ provider }: { provider: Provider }) {
             <p className="text-sm text-gray-500 mt-1 line-clamp-2">{provider.description}</p>
           )}
         </div>
-        <Badge color="blue">{provider.exam_count} exams</Badge>
+        <Badge color="accent">{provider.exam_count} exams</Badge>
       </div>
     </Card>
   );

@@ -33,21 +33,37 @@ export default function PracticePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const fetchingPage = useRef<number | null>(null);
 
-  // Load first page of questions
+  // Load questions — when initialQuestionId is set, load pages until found
   useEffect(() => {
     if (!examId) return;
-    api.getQuestions(examId, 1, API_PER_PAGE).then((page) => {
-      setQuestions(page.items);
-      setApiPage(1);
-      setTotalApiPages(page.total_pages);
-      setTotalQuestions(page.total);
-      if (initialQuestionId && !initialIdxSet.current) {
-        const idx = page.items.findIndex((q) => q.id === Number(initialQuestionId));
+    const targetId = initialQuestionId ? Number(initialQuestionId) : null;
+
+    (async () => {
+      const firstPage = await api.getQuestions(examId, 1, API_PER_PAGE);
+      let allItems = firstPage.items;
+      let loadedPage = 1;
+      setTotalApiPages(firstPage.total_pages);
+      setTotalQuestions(firstPage.total);
+
+      if (targetId && !initialIdxSet.current) {
+        // Load additional pages until the target question is found
+        while (
+          allItems.findIndex((q) => q.id === targetId) === -1 &&
+          loadedPage < firstPage.total_pages
+        ) {
+          loadedPage++;
+          const nextPage = await api.getQuestions(examId, loadedPage, API_PER_PAGE);
+          allItems = [...allItems, ...nextPage.items];
+        }
+        const idx = allItems.findIndex((q) => q.id === targetId);
         if (idx !== -1) setCurrentIdx(idx);
         initialIdxSet.current = true;
       }
+
+      setQuestions(allItems);
+      setApiPage(loadedPage);
       setLoading(false);
-    });
+    })();
   }, [examId, initialQuestionId]);
 
   // Auto-fetch next API page when user reaches the last navigator page (50-item page)

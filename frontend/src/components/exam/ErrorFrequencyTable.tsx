@@ -25,7 +25,7 @@ export default function ErrorFrequencyTable({ items }: ErrorFrequencyTableProps)
         <tbody>
           {items.map((item) => (
             <tr key={item.question_id} className="border-b border-gray-100">
-              <td className="py-2 px-3 font-mono text-blue-600">{item.external_id}</td>
+              <td className="py-2 px-3 font-mono text-accent-600">{item.external_id}</td>
               <td className="py-2 px-3 text-right text-red-600 font-medium">{item.error_count}</td>
               <td className="py-2 px-3 text-right text-gray-600">{item.attempt_count}</td>
               <td className="py-2 px-3 text-right text-gray-600">{Math.round(item.error_rate * 100)}%</td>

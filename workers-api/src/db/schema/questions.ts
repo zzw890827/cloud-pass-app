@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { exams } from "./exams";
+import { examDomains } from "./exam-domains";
 
 export const questions = sqliteTable(
   "questions",
@@ -9,6 +10,9 @@ export const questions = sqliteTable(
     examId: integer("exam_id")
       .notNull()
       .references(() => exams.id, { onDelete: "cascade" }),
+    domainId: integer("domain_id").references(() => examDomains.id, {
+      onDelete: "set null",
+    }), // nullable — null for exams without domains (backward compat)
     externalId: text("external_id").notNull(),
     questionText: text("question_text").notNull(),
     questionType: text("question_type").notNull(), // "single" | "multi"
@@ -26,5 +30,6 @@ export const questions = sqliteTable(
   (table) => [
     index("idx_questions_exam_id").on(table.examId),
     index("idx_questions_external_id").on(table.externalId),
+    index("idx_questions_domain_id").on(table.domainId),
   ]
 );

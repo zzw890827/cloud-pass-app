@@ -43,7 +43,7 @@ export default function ScoreChart({ items, passPercentage }: ScoreChartProps) {
         <Line
           type="monotone"
           dataKey="score"
-          stroke="#3b82f6"
+          stroke="var(--color-accent-500)"
           strokeWidth={2}
           dot={{ r: 4 }}
           activeDot={{ r: 6 }}
