@@ -3,3 +3,35 @@
 @theme inline {
   --font-sans: var(--font-geist);
 }
+
+/*
+ * Accent palette — the app's single "primary" colour, used for buttons, links,
+ * selected states and focus rings. Default is the original blue; a provider
+ * scope below repaints the whole app by overriding these variables.
+ *
+ * `static` keeps every step in the output even when no utility references it:
+ * the charts read `--color-accent-*` directly from inline SVG attributes, which
+ * Tailwind cannot see, and a pruned variable would silently render as no colour.
+ */
+@theme static {
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+}
+
+/*
+ * Anthropic — the brand's warm orange, darkened from #d97757 at the 500/600/700
+ * steps so white-on-accent text and accent borders keep WCAG AA contrast the
+ * way the default blue does.
+ */
+[data-provider="anthropic"] {
+  --color-accent-50: #fdf6f3;
+  --color-accent-100: #f9e7df;
+  --color-accent-200: #f2cfc0;
+  --color-accent-500: #c96343;
+  --color-accent-600: #a94f33;
+  --color-accent-700: #8a3f28;
+}

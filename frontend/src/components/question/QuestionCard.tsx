@@ -94,7 +94,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
     const base = "w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-all text-sm";
     if (!isAnswered) {
       return selected.has(optionId)
-        ? `${base} border-blue-500 bg-blue-50`
+        ? `${base} border-accent-500 bg-accent-50`
         : `${base} border-gray-200 hover:border-gray-300 hover:bg-gray-50`;
     }
     const correctIds = result.correct_option_ids;
@@ -110,7 +110,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <Badge color="blue">{question.external_id}</Badge>
+            <Badge color="accent">{question.external_id}</Badge>
             <Badge color={isMulti ? "yellow" : "gray"}>
               {isMulti ? `Select ${question.num_correct}` : "Single Choice"}
             </Badge>

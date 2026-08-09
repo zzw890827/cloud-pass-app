@@ -63,7 +63,7 @@ function CustomYAxisTick({ x = 0, y = 0, payload, data, onNavigate }: CustomTick
         y={0}
         dy={4}
         textAnchor="end"
-        fill="#2563eb"
+        fill="var(--color-accent-600)"
         fontSize={12}
         style={{ cursor: "pointer", textDecoration: "underline" }}
         onClick={(e) => {

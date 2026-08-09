@@ -15,10 +15,10 @@ export default function ExamNavigator({ questions, currentIndex, onSelect }: Exa
         const isCurrent = q.order_index === currentIndex;
         let bg = "bg-gray-100 text-gray-600 hover:bg-gray-200"; // unanswered
         if (q.is_answered) {
-          bg = "bg-blue-100 text-blue-700 hover:bg-blue-200"; // answered
+          bg = "bg-accent-100 text-accent-700 hover:bg-accent-200"; // answered
         }
         if (isCurrent) {
-          bg += " ring-2 ring-blue-500";
+          bg += " ring-2 ring-accent-500";
         }
 
         return (

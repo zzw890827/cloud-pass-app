@@ -25,6 +25,7 @@ examRoutes.get("/", async (c) => {
       passPercentage: exams.passPercentage,
       timeLimitMinutes: exams.timeLimitMinutes,
       providerName: providers.name,
+      providerSlug: providers.slug,
     })
     .from(exams)
     .innerJoin(providers, eq(exams.providerId, providers.id))
@@ -47,6 +48,7 @@ examRoutes.get("/", async (c) => {
       pass_percentage: r.passPercentage,
       time_limit_minutes: r.timeLimitMinutes,
       provider_name: r.providerName,
+      provider_slug: r.providerSlug,
     }))
   );
 });
@@ -70,6 +72,7 @@ examRoutes.get("/:id", async (c) => {
       passPercentage: exams.passPercentage,
       timeLimitMinutes: exams.timeLimitMinutes,
       providerName: providers.name,
+      providerSlug: providers.slug,
     })
     .from(exams)
     .innerJoin(providers, eq(exams.providerId, providers.id))
@@ -116,6 +119,7 @@ examRoutes.get("/:id", async (c) => {
     pass_percentage: exam.passPercentage,
     time_limit_minutes: exam.timeLimitMinutes,
     provider_name: exam.providerName,
+    provider_slug: exam.providerSlug,
     progress_summary: progressSummary,
     active_session_id: activeSession?.id ?? null,
     domains: domainRows.map((d) => ({

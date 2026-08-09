@@ -28,7 +28,7 @@ function QuestionDetail({ question, index }: { question: SessionQuestionResult; 
     <div className="space-y-4">
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <Badge color="blue">{question.external_id}</Badge>
+          <Badge color="accent">{question.external_id}</Badge>
           <Badge color={isMulti ? "yellow" : "gray"}>
             {isMulti ? "Multiple Choice" : "Single Choice"}
           </Badge>
@@ -149,7 +149,7 @@ export default function ExamResultPage() {
               <button
                 key={qr.question_id}
                 className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg text-xs font-medium flex items-center justify-center cursor-pointer transition-all ${bg} ${
-                  isSelected ? "ring-2 ring-blue-500 ring-offset-1 scale-110" : "hover:scale-105 hover:shadow-sm"
+                  isSelected ? "ring-2 ring-accent-500 ring-offset-1 scale-110" : "hover:scale-105 hover:shadow-sm"
                 }`}
                 title={qr.external_id}
                 onClick={() => setSelectedIdx(isSelected ? null : idx)}

@@ -65,7 +65,7 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
   const getOptionStyle = (optionId: number) => {
     const base = "w-full text-left p-3 sm:p-4 rounded-lg border-2 transition-all text-sm";
     if (selected.has(optionId)) {
-      return `${base} border-blue-500 bg-blue-50`;
+      return `${base} border-accent-500 bg-accent-50`;
     }
     if (submitted) {
       return `${base} border-gray-200 opacity-60`;
@@ -77,7 +77,7 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
     <div className="space-y-4">
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <Badge color="blue">{question.external_id}</Badge>
+          <Badge color="accent">{question.external_id}</Badge>
           <Badge color={isMulti ? "yellow" : "gray"}>
             {isMulti ? `Select ${question.num_correct}` : "Single Choice"}
           </Badge>
@@ -113,7 +113,7 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
       )}
 
       {submitted && (
-        <p className="text-sm text-blue-600 font-medium">Answer locked</p>
+        <p className="text-sm text-accent-600 font-medium">Answer locked</p>
       )}
     </div>
   );
