@@ -19,6 +19,9 @@ export const questions = sqliteTable(
     explanation: text("explanation"),
     numCorrect: integer("num_correct").notNull().default(1),
     orderIndex: integer("order_index").notNull().default(0),
+    // Manual draw weight, 0–100. 50 is neutral (selection behaves as if the
+    // field did not exist), 0 excludes the question, 100 always draws it.
+    weight: integer("weight").notNull().default(50),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
