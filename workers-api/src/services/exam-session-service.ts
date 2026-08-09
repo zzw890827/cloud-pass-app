@@ -15,6 +15,14 @@ import { AppError } from "../lib/errors";
 
 // --- Weighted question selection ---
 
+// Per-question manual draw weight, edited from the maintenance screens.
+// NEUTRAL leaves selection exactly as it was before the field existed.
+const MANUAL_WEIGHT = {
+  MIN: 0,
+  NEUTRAL: 50,
+  MAX: 100,
+};
+
 const WEIGHT_CONFIG = {
   BASE: 1.0,
   NEW_BONUS: 3.0,
@@ -161,9 +169,13 @@ async function selectWeightedQuestions(
 ): Promise<number[]> {
   // 5 parallel queries
   const [allQuestions, historyRows, practiceRows, bookmarkRows, domainRows] = await Promise.all([
-    // 1. All question IDs (+ domain) for exam
+    // 1. All question IDs (+ domain, + manual draw weight) for exam
     db
-      .select({ id: questions.id, domainId: questions.domainId })
+      .select({
+        id: questions.id,
+        domainId: questions.domainId,
+        manualWeight: questions.weight,
+      })
       .from(questions)
       .where(eq(questions.examId, examId)),
 
@@ -233,11 +245,34 @@ async function selectWeightedQuestions(
       .orderBy(examDomains.orderIndex),
   ]);
 
-  const allIds = allQuestions.map((q) => q.id);
+  // Manual weights first: MIN is a hard exclusion, so those questions take no
+  // part in anything below — not the pool, not the domain quotas, not the
+  // "fewer questions than requested" shortcut. Values are clamped because only
+  // the admin API enforces the range; a direct DB write could be out of it.
+  const drawable = allQuestions
+    .map((q) => ({
+      ...q,
+      manualWeight: Math.min(Math.max(q.manualWeight, MANUAL_WEIGHT.MIN), MANUAL_WEIGHT.MAX),
+    }))
+    .filter((q) => q.manualWeight > MANUAL_WEIGHT.MIN);
+  const allIds = drawable.map((q) => q.id);
 
   if (allIds.length <= numToSelect) {
     return shuffleArray(allIds);
   }
+
+  // MAX means "always drawn": these take their slots before anything else, and
+  // are randomly trimmed if they alone overflow the session.
+  const mandatoryIds = drawable
+    .filter((q) => q.manualWeight >= MANUAL_WEIGHT.MAX)
+    .map((q) => q.id);
+
+  if (mandatoryIds.length >= numToSelect) {
+    return shuffleArray(mandatoryIds).slice(0, numToSelect);
+  }
+
+  const mandatory = new Set(mandatoryIds);
+  const remainingToSelect = numToSelect - mandatoryIds.length;
 
   // Build lookup maps
   const examHistoryMap = new Map(
@@ -265,9 +300,10 @@ async function selectWeightedQuestions(
 
   const now = Date.now();
 
-  // Calculate weights
+  // Calculate weights for everything still up for selection.
   type WeightedItem = { id: number; weight: number };
-  const weighted: WeightedItem[] = allIds.map((id) => {
+  const selectable = drawable.filter((q) => !mandatory.has(q.id));
+  const weighted: WeightedItem[] = selectable.map(({ id, manualWeight }) => {
     const exam = examHistoryMap.get(id);
     const practice = practiceMap.get(id);
     const isBookmarked = bookmarkSet.has(id);
@@ -346,15 +382,22 @@ async function selectWeightedQuestions(
       }
     }
 
-    const weight =
+    const scored =
       WEIGHT_CONFIG.BASE + wNew + wError + wErrorRate + wFrequency + wBookmark + wForgetting;
+
+    // The manual weight scales the score around NEUTRAL, so 50 keeps the
+    // question exactly as likely as it was before manual weights existed.
+    const weight = scored * (manualWeight / MANUAL_WEIGHT.NEUTRAL);
 
     return { id, weight };
   });
 
   // No domains configured → global weighted selection (backward compatible).
   if (domainRows.length === 0) {
-    return weightedSampleWithoutReplacement(weighted, numToSelect);
+    return shuffleArray([
+      ...mandatoryIds,
+      ...weightedSampleWithoutReplacement(weighted, remainingToSelect),
+    ]);
   }
 
   // Domain-aware selection: domain weights set per-domain quotas; the scoring
@@ -363,7 +406,8 @@ async function selectWeightedQuestions(
   const itemsByDomain = new Map<number, { id: number; weight: number }[]>();
   const unassigned: { id: number; weight: number }[] = [];
 
-  for (const q of allQuestions) {
+  for (const q of drawable) {
+    if (mandatory.has(q.id)) continue; // already holds a slot
     const item = { id: q.id, weight: weightById.get(q.id) ?? WEIGHT_CONFIG.BASE };
     if (q.domainId != null) {
       const bucket = itemsByDomain.get(q.domainId);
@@ -382,10 +426,10 @@ async function selectWeightedQuestions(
       weight: d.weight,
       cap: itemsByDomain.get(d.id)?.length ?? 0,
     })),
-    numToSelect
+    remainingToSelect
   );
 
-  const selected: number[] = [];
+  const selected: number[] = [...mandatoryIds];
   for (const [domainId, items] of itemsByDomain) {
     const quota = quotaByDomain.get(domainId) ?? 0;
     if (quota > 0) selected.push(...weightedSampleWithoutReplacement(items, quota));
@@ -433,13 +477,24 @@ export async function createSession(db: Database, userId: number, examId: number
   // Select questions
   const questionIds = await selectWeightedQuestions(db, examId, userId, exam.numQuestions);
 
-  // Create session
+  // Refuse rather than open a session with nothing in it — an empty session
+  // would still block the exam behind the "already active" check above.
+  if (questionIds.length === 0) {
+    throw new AppError(
+      422,
+      "This exam has no questions available to draw. Check that not every question is excluded by its weight."
+    );
+  }
+
+  // Create session. The session records how many questions it actually holds,
+  // which can be fewer than the exam asks for when the pool is too small (or
+  // thinned out by weight-0 exclusions) — scoring divides by this number.
   const [session] = await db
     .insert(examSessions)
     .values({
       userId,
       examId,
-      numQuestions: exam.numQuestions,
+      numQuestions: questionIds.length,
       passPercentage: exam.passPercentage,
       timeLimitMinutes: exam.timeLimitMinutes,
     })

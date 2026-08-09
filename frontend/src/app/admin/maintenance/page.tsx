@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import Card from "@/components/ui/Card";
@@ -11,6 +12,7 @@ import Spinner from "@/components/ui/Spinner";
 import type { Exam, DeleteExamResult } from "@/types";
 
 export default function MaintenancePage() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,14 +117,18 @@ export default function MaintenancePage() {
                     <p className="text-xs text-gray-400">{exam.provider_name}</p>
                   </div>
                   {!isConfirming && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => startConfirm(exam.id)}
-                      className="shrink-0"
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => router.push(`/admin/questions/${exam.id}`)}
+                      >
+                        Questions
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => startConfirm(exam.id)}>
+                        Delete
+                      </Button>
+                    </div>
                   )}
                 </div>
 

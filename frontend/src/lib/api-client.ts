@@ -156,6 +156,15 @@ export const api = {
     request<import("@/types").DeleteExamResult>(`/admin/exams/${id}`, {
       method: "DELETE",
     }),
+  getQuestionWeights: (examId: number, page = 1, perPage = 50) =>
+    request<import("@/types").QuestionWeightPage>(
+      `/admin/exams/${examId}/questions?page=${page}&per_page=${perPage}`
+    ),
+  updateQuestionWeight: (questionId: number, weight: number) =>
+    request<{ id: number; weight: number }>(`/admin/questions/${questionId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ weight }),
+    }),
 };
 
 export { ApiError };

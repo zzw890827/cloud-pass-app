@@ -126,3 +126,44 @@ attribute on every examId change, only when the exam section is left.
 
 Known trade-off: the very first exam page of a session still repaints once the
 API answers; removing that would mean resolving the provider server-side.
+
+## Question draw weights
+Goal: a question list in Maintenance where each question's draw weight can be
+set from 0 to 100, folded into the existing weighted selection algorithm.
+
+Agreed semantics: 0 excludes a question outright, 100 always draws it, and
+1–99 scales the existing score by w/50 — so 50 is neutral and leaves selection
+exactly as it behaved before the field existed.
+
+- [x] Schema: `questions.weight integer NOT NULL DEFAULT 50` + migration 0003
+- [x] Algorithm: clamp weights, drop weight-0 from the pool entirely, take the
+      weight-100 questions first (randomly trimmed if they alone overflow the
+      session), scale the rest by w/50; domain quotas allocate what is left
+- [x] `createSession` refuses with 422 when nothing is drawable, and records the
+      number of questions actually drawn so scoring divides by the right total
+- [x] Admin API: `GET /admin/exams/:id/questions`, `PATCH /admin/questions/:id`
+- [x] CORS: allow PATCH (it was not in allowMethods)
+- [x] UI: `/admin/questions/[examId]` — slider + number box per question,
+      auto-saving, reachable from a Questions button on each Maintenance card
+- [x] Verify: 60 sessions × fresh users — weight 0 drawn 0/60, weight 100 drawn
+      60/60, weight 90 ≈ 2× the average of weight-50 questions, weight 10 well
+      below; domain path keeps exact session size with quotas 50/30/20
+- [x] Verify: empty pool → 422 with no session left behind; partly excluded pool
+      → session sized and scored by what remains
+- [x] Verify: validation (-1, 101, 50.5, invalid JSON, null body → 400), authz
+      (non-admin → 403 API, "Admin access required" in UI), 404s
+- [x] Verify: rapid consecutive edits (80→35→60) end with DB matching the UI
+- [x] Verify: `tsc --noEmit` and eslint clean in both packages
+
+### Review
+Two rounds. Round 1 found the serious one: excluding questions shrank sessions
+silently — all-zero weights produced an empty session that still blocked the
+exam behind the "active session" check, and a partly excluded pool scored out
+of the exam's configured total, making a pass impossible. Also: non-admins hit
+an unreachable access-denied branch and span forever. Round 2: a failed page
+request left the spinner up with the error UI unreachable, and concurrent
+PATCHes had no ordering, so the stored weight could end up behind the UI —
+saves for a row now run on one chain, and a pending edit is flushed on unmount.
+
+Note: questions set to 100 take their slots ahead of content-domain quotas, so
+marking many of them shifts a session's domain mix. Said so on the page.

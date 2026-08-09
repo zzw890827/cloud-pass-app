@@ -269,6 +269,27 @@ export interface UnusedQuestionItem {
   question_preview: string;
 }
 
+export interface QuestionWeightItem {
+  id: number;
+  external_id: string;
+  question_type: string;
+  question_preview: string;
+  domain_name: string | null;
+  weight: number;
+  order_index: number;
+}
+
+export interface QuestionWeightPage {
+  exam_id: number;
+  exam_code: string;
+  exam_name: string;
+  items: QuestionWeightItem[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
 export interface ExamUnusedQuestions {
   exam_id: number;
   total_questions: number;
