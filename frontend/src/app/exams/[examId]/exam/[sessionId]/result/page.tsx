@@ -8,11 +8,18 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Spinner from "@/components/ui/Spinner";
 import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
+import HotspotAnswerArea from "@/components/question/HotspotAnswerArea";
 import type { ExamSessionResult, SessionQuestionResult } from "@/types";
 
 function QuestionDetail({ question, index }: { question: SessionQuestionResult; index: number }) {
   const isMulti = question.question_type === "multi";
+  const isHotspot = question.question_type === "hotspot";
+  const hotspotRows = question.hotspot_rows ?? [];
   const selectedSet = new Set(question.selected_option_ids ?? []);
+
+  // An unanswered hotspot has no saved array, so pad to one null per row.
+  const hotspotPicks: (number | null)[] =
+    question.selected_option_ids ?? new Array(hotspotRows.length).fill(null);
 
   const getOptionStyle = (optId: number, isCorrect: boolean) => {
     const base = "w-full text-left p-3 sm:p-4 rounded-lg border-2 text-sm";
@@ -29,8 +36,8 @@ function QuestionDetail({ question, index }: { question: SessionQuestionResult; 
       <div>
         <div className="flex items-center gap-2 mb-2">
           <Badge color="accent">{question.external_id}</Badge>
-          <Badge color={isMulti ? "yellow" : "gray"}>
-            {isMulti ? "Multiple Choice" : "Single Choice"}
+          <Badge color={isMulti || isHotspot ? "yellow" : "gray"}>
+            {isHotspot ? "HotSpot" : isMulti ? "Multiple Choice" : "Single Choice"}
           </Badge>
           {question.is_correct === true && <Badge color="green">Correct</Badge>}
           {question.is_correct === false && <Badge color="red">Incorrect</Badge>}
@@ -42,26 +49,35 @@ function QuestionDetail({ question, index }: { question: SessionQuestionResult; 
         </div>
       </div>
 
-      <div className="space-y-2">
-        {question.options.map((opt) => (
-          <div key={opt.id} className={getOptionStyle(opt.id, opt.is_correct)}>
-            <div className="flex items-start gap-2">
-              <span className="font-semibold shrink-0">{opt.label}.</span>
-              <span className="flex-1">
-                <MarkdownRenderer content={opt.option_text} compact />
-              </span>
-              <span className="shrink-0 ml-2">
-                {opt.is_correct && (
-                  <span className="text-green-600 text-xs font-medium">✓ Correct</span>
-                )}
-                {!opt.is_correct && selectedSet.has(opt.id) && (
-                  <span className="text-red-600 text-xs font-medium">✗ Wrong</span>
-                )}
-              </span>
+      {isHotspot ? (
+        <HotspotAnswerArea
+          rows={hotspotRows}
+          options={question.options}
+          picks={hotspotPicks}
+          correctOptionIds={question.correct_option_ids}
+        />
+      ) : (
+        <div className="space-y-2">
+          {question.options.map((opt) => (
+            <div key={opt.id} className={getOptionStyle(opt.id, opt.is_correct)}>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold shrink-0">{opt.label}.</span>
+                <span className="flex-1">
+                  <MarkdownRenderer content={opt.option_text} compact />
+                </span>
+                <span className="shrink-0 ml-2">
+                  {opt.is_correct && (
+                    <span className="text-green-600 text-xs font-medium">✓ Correct</span>
+                  )}
+                  {!opt.is_correct && selectedSet.has(opt.id) && (
+                    <span className="text-red-600 text-xs font-medium">✗ Wrong</span>
+                  )}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

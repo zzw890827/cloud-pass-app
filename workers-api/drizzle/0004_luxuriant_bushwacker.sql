@@ -1,0 +1,1 @@
+ALTER TABLE `questions` ADD `hotspot_rows` text;

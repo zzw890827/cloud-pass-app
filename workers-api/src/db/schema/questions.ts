@@ -15,8 +15,11 @@ export const questions = sqliteTable(
     }), // nullable — null for exams without domains (backward compat)
     externalId: text("external_id").notNull(),
     questionText: text("question_text").notNull(),
-    questionType: text("question_type").notNull(), // "single" | "multi"
+    questionType: text("question_type").notNull(), // "single" | "multi" | "hotspot"
     explanation: text("explanation"),
+    // Hotspot rows: JSON [{ text, answer }] where `answer` is an option label.
+    // Null for single/multi questions.
+    hotspotRows: text("hotspot_rows"),
     numCorrect: integer("num_correct").notNull().default(1),
     orderIndex: integer("order_index").notNull().default(0),
     // Manual draw weight, 0–100. 50 is neutral (selection behaves as if the

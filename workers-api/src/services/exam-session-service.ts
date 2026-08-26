@@ -12,6 +12,7 @@ import {
   bookmarks,
 } from "../db/schema";
 import { AppError } from "../lib/errors";
+import { correctOptionIds, gradeAnswer, publicHotspotRows } from "../lib/grading";
 
 // --- Weighted question selection ---
 
@@ -578,6 +579,7 @@ export async function getSessionQuestion(
     question_text: question.questionText,
     question_type: question.questionType,
     num_correct: question.numCorrect,
+    hotspot_rows: publicHotspotRows(question),
     options: opts.map((o) => ({
       id: o.id,
       label: o.label,
@@ -613,15 +615,17 @@ export async function submitSessionAnswer(
   if (!sessionQuestion) throw new AppError(404, "Question not found at this index");
 
   // Check correctness
+  const question = await db.query.questions.findFirst({
+    where: eq(questions.id, sessionQuestion.questionId),
+  });
+  if (!question) throw new AppError(404, "Question not found");
+
   const opts = await db
     .select()
     .from(options)
     .where(eq(options.questionId, sessionQuestion.questionId));
 
-  const correctIds = new Set(opts.filter((o) => o.isCorrect).map((o) => o.id));
-  const selectedSet = new Set(selectedOptionIds);
-  const isCorrect =
-    correctIds.size === selectedSet.size && [...correctIds].every((id) => selectedSet.has(id));
+  const { isCorrect } = gradeAnswer(question, opts, selectedOptionIds);
 
   await db
     .update(examSessionQuestions)
@@ -770,6 +774,12 @@ export async function getSessionResult(db: Database, sessionId: number, userId: 
   if (rows.length === 0) throw new AppError(404, "Session not found");
   const { session, examCode, examName } = rows[0];
 
+  // This payload is the answer key — per-option `is_correct` and, for hotspot, the
+  // per-row correct option. Serving it while the session is still running would let
+  // a candidate read the answers mid-exam by hitting this endpoint directly.
+  if (session.status === "in_progress")
+    throw new AppError(400, "Session is not complete");
+
   const sessionQuestions = await db
     .select({
       id: examSessionQuestions.id,
@@ -780,6 +790,7 @@ export async function getSessionResult(db: Database, sessionId: number, userId: 
       externalId: questions.externalId,
       questionText: questions.questionText,
       questionType: questions.questionType,
+      hotspotRows: questions.hotspotRows,
     })
     .from(examSessionQuestions)
     .innerJoin(questions, eq(examSessionQuestions.questionId, questions.id))
@@ -812,6 +823,10 @@ export async function getSessionResult(db: Database, sessionId: number, userId: 
       external_id: sq.externalId,
       question_text: sq.questionText,
       question_type: sq.questionType,
+      hotspot_rows: publicHotspotRows(sq),
+      // The answer key, row-ordered for hotspot — `options[].is_correct` cannot
+      // express a per-row answer. The only encoding of it on this payload.
+      correct_option_ids: correctOptionIds(sq, opts),
       selected_option_ids: sq.selectedOptionIds
         ? (JSON.parse(sq.selectedOptionIds) as number[])
         : null,

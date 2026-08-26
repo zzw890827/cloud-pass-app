@@ -20,13 +20,13 @@ Ask the user for:
 Generate questions following these quality guidelines:
 
 - **Scenario-based**: Each question should present a realistic scenario, not just test definitions
-- **4 options minimum**: Labels A through D (or more for multi-select)
-- **Mix of single and multi**: ~80% single-choice, ~20% multi-choice
+- **4 options minimum**: Labels A through D (or more for multi-select). HotSpot questions are the exception — their options are the shared choice list, so 2-3 is normal
+- **Mix of types**: ~80% single-choice, ~20% multi-choice. Add HotSpot questions where the topic is genuinely a classification/matching exercise — don't force them
 - **Thorough explanations**: Each explanation should explain why the correct answer is right AND why each incorrect option is wrong
 - **Unique external_id**: Use format `<slug>-<code>-<number>` (e.g., `aws-saa-001`)
 - **Markdown formatting**: Use bold, code blocks, and lists in questions and explanations where appropriate
 
-Each question must match this exact schema:
+Each single/multi question must match this exact schema:
 
 ```json
 {
@@ -43,6 +43,39 @@ Each question must match this exact schema:
   ]
 }
 ```
+
+### HotSpot questions
+
+A HotSpot question is an "Answer Area" table: the stem sets up a classification, then
+each **row** is a statement the candidate assigns to one of a **shared** list of choices.
+The same choice may be correct for several rows.
+
+`options` is that shared choice list — every row's dropdown offers all of it, so
+`is_correct` is omitted (correctness lives on the rows). Each row's `answer` must be
+one of the option **labels**; the import API returns 422 if it isn't.
+
+Scoring is all-or-nothing: the candidate must get every row right.
+
+```json
+{
+  "external_id": "string — unique ID",
+  "text": "string — the classification setup (supports Markdown)",
+  "type": "hotspot",
+  "explanation": "string — detailed explanation (supports Markdown)",
+  "options": [
+    { "label": "A", "text": "Input Preparation" },
+    { "label": "B", "text": "Prompt Construction" },
+    { "label": "C", "text": "Output Handling" }
+  ],
+  "rows": [
+    { "text": "Persist the validated output for downstream consumption and audit.", "answer": "C" },
+    { "text": "Summarize prior conversation history when full history is no longer needed.", "answer": "A" }
+  ]
+}
+```
+
+Aim for 4-6 rows and 3-4 choices, and make sure at least two rows share a choice —
+a HotSpot where every row has a distinct answer is really just a matching puzzle.
 
 The full import file schema:
 
