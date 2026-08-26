@@ -168,6 +168,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           picks={selected}
           onChange={isAnswered || submitting ? undefined : pickHotspotRow}
           correctOptionIds={result?.correct_option_ids}
+          rowHeader={question.hotspot_row_header}
+          choiceHeader={question.hotspot_choice_header}
         />
       ) : (
         <div className="space-y-2">

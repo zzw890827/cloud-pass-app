@@ -20,6 +20,11 @@ export const questions = sqliteTable(
     // Hotspot rows: JSON [{ text, answer }] where `answer` is an option label.
     // Null for single/multi questions.
     hotspotRows: text("hotspot_rows"),
+    // Column headings for the hotspot Answer Area — e.g. "Statements:" over the
+    // rows and "Select Yes or No:" over the dropdowns. Both optional; the table
+    // renders without a header row when they are null.
+    hotspotRowHeader: text("hotspot_row_header"),
+    hotspotChoiceHeader: text("hotspot_choice_header"),
     numCorrect: integer("num_correct").notNull().default(1),
     orderIndex: integer("order_index").notNull().default(0),
     // Manual draw weight, 0–100. 50 is neutral (selection behaves as if the

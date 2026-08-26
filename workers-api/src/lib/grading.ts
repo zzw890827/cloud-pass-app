@@ -63,6 +63,30 @@ export function publicHotspotRows(question: GradableQuestion): { text: string }[
   return parseHotspotRows(question.hotspotRows).map((r) => ({ text: r.text }));
 }
 
+/** The question columns the Answer Area needs to render its header row. */
+type HeaderedQuestion = Pick<
+  typeof questionsTable.$inferSelect,
+  "questionType" | "hotspotRowHeader" | "hotspotChoiceHeader"
+>;
+
+/**
+ * Column headings for the hotspot Answer Area, as the client receives them.
+ * Null for non-hotspot questions, and individually null when the author didn't
+ * set them — the table simply renders without a header row.
+ */
+export function hotspotHeaders(question: HeaderedQuestion): {
+  hotspot_row_header: string | null;
+  hotspot_choice_header: string | null;
+} {
+  if (!isHotspot(question.questionType)) {
+    return { hotspot_row_header: null, hotspot_choice_header: null };
+  }
+  return {
+    hotspot_row_header: question.hotspotRowHeader,
+    hotspot_choice_header: question.hotspotChoiceHeader,
+  };
+}
+
 /**
  * Grade a submission. All-or-nothing for every type: hotspot compares the
  * selection to the answer key positionally (one pick per row), single/multi

@@ -62,6 +62,8 @@ Scoring is all-or-nothing: the candidate must get every row right.
   "text": "string — the classification setup (supports Markdown)",
   "type": "hotspot",
   "explanation": "string — detailed explanation (supports Markdown)",
+  "row_header": "Statements:",
+  "choice_header": "Select Yes or No:",
   "options": [
     { "label": "A", "text": "Input Preparation" },
     { "label": "B", "text": "Prompt Construction" },
@@ -73,6 +75,12 @@ Scoring is all-or-nothing: the candidate must get every row right.
   ]
 }
 ```
+
+`row_header` and `choice_header` are the two column headings of the Answer Area — the
+statements column and the dropdown column. Write them as instructions, the way the real
+exams do: `"Statements:"` over the rows and `"Select Yes or No:"` over the dropdowns, or
+`"Tactic:"` / `"Select the Correct Request Lifecycle:"`. They tell the candidate what the
+rows are and what the choice means, so the stem doesn't have to repeat it.
 
 Aim for 4-6 rows and 3-4 choices, and make sure at least two rows share a choice —
 a HotSpot where every row has a distinct answer is really just a matching puzzle.
