@@ -6,13 +6,70 @@ export const importOptionSchema = z.object({
   is_correct: z.boolean(),
 });
 
-export const importQuestionSchema = z.object({
+// Hotspot choice lists carry no per-option correctness — it lives on the rows —
+// so `is_correct` is optional there. Keeping it required on single/multi means a
+// payload that omits it still fails loudly instead of importing zero correct options.
+export const importHotspotOptionSchema = importOptionSchema.extend({
+  is_correct: z.boolean().optional().default(false),
+});
+
+export const importHotspotRowSchema = z.object({
+  text: z.string(),
+  answer: z.string(), // an option `label`
+});
+
+const choiceQuestionSchema = z.object({
   external_id: z.string(),
   text: z.string(),
   type: z.enum(["single", "multi"]),
   explanation: z.string().optional().nullable(),
   options: z.array(importOptionSchema).min(2),
 });
+
+const hotspotQuestionSchema = z.object({
+  external_id: z.string(),
+  text: z.string(),
+  type: z.literal("hotspot"),
+  explanation: z.string().optional().nullable(),
+  // The shared choice list every row's dropdown offers.
+  options: z.array(importHotspotOptionSchema).min(2),
+  rows: z.array(importHotspotRowSchema).min(1),
+});
+
+/**
+ * Discriminated on `type` so a bad question reports only its own branch's errors —
+ * a plain `z.union` would bury the real problem under the other branch's noise.
+ */
+export const importQuestionSchema = z
+  .discriminatedUnion("type", [choiceQuestionSchema, hotspotQuestionSchema])
+  .superRefine((q, ctx) => {
+    if (q.type !== "hotspot") return;
+
+    // Labels are how a row names its answer, so duplicates make the mapping ambiguous.
+    const seen = new Set<string>();
+    q.options.forEach((o, i) => {
+      if (seen.has(o.label)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["options", i, "label"],
+          message: `Question ${q.external_id}: duplicate option label "${o.label}"`,
+        });
+      }
+      seen.add(o.label);
+    });
+
+    // An `answer` that matches no option label would import a question that can
+    // never be answered correctly, so reject it at the boundary.
+    q.rows.forEach((row, i) => {
+      if (!seen.has(row.answer)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rows", i, "answer"],
+          message: `Question ${q.external_id}: row answer "${row.answer}" matches no option label (have: ${[...seen].join(", ")})`,
+        });
+      }
+    });
+  });
 
 export const importExamSchema = z.object({
   code: z.string(),
@@ -37,6 +94,7 @@ export const importPayloadSchema = z.object({
 });
 
 export type ImportPayload = z.infer<typeof importPayloadSchema>;
+export type ImportQuestion = z.infer<typeof importQuestionSchema>;
 
 /**
  * Normalize legacy import format (top-level `questions` with `question_text`/`question_type`)

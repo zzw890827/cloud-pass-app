@@ -82,7 +82,10 @@ export async function importQuestions(db: Database, data: ImportPayload) {
       continue;
     }
 
-    const numCorrect = q.options.filter((o) => o.is_correct).length;
+    // For hotspot, correctness lives on the rows, not the options — every row is
+    // one thing to get right.
+    const numCorrect =
+      q.type === "hotspot" ? q.rows.length : q.options.filter((o) => o.is_correct).length;
 
     const [created] = await db
       .insert(questions)
@@ -92,6 +95,7 @@ export async function importQuestions(db: Database, data: ImportPayload) {
         questionText: q.text,
         questionType: q.type,
         explanation: q.explanation,
+        hotspotRows: q.type === "hotspot" ? JSON.stringify(q.rows) : null,
         numCorrect,
         orderIndex: currentOrderIndex,
       })
