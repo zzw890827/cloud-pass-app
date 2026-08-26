@@ -167,3 +167,85 @@ saves for a row now run on one chain, and a pending edit is flushed on unmount.
 
 Note: questions set to 100 take their slots ahead of content-domain quotas, so
 marking many of them shifts a session's domain mix. Said so on the page.
+
+## HotSpot question type
+Goal: support a third question type alongside `single`/`multi` — an "Answer
+Area" table where each row is a statement assigned to one of a shared list of
+choices, as used by the real AWS/Azure exams.
+
+Agreed semantics: one shared choice list for the whole question (every row's
+dropdown offers all of it), all-or-nothing scoring (every row must be right),
+and per-row correct/wrong marks in review.
+
+Key decision: the answer wire format stays `selected_option_ids: number[]`,
+reinterpreted for hotspot as **ordered and index-aligned with the rows** —
+`selected_option_ids[i]` is the pick for row `i`, duplicates allowed. That means
+no payload-schema change and no change to either persistence column; grading
+just compares positionally instead of as sets. The only new data is the row
+list, stored as JSON in `questions.hotspot_rows` (`[{text, answer}]`, where
+`answer` is an option label). A `question_rows` table was rejected: it would add
+a fifth `inArray` query to `getSessionResult`, the exact shape that hit D1's
+100-bound-parameter limit before, and nothing edits question content anyway.
+
+- [x] Schema: `questions.hotspot_rows text` (nullable) + migration 0004
+- [x] Import: `type`-discriminated zod union; hotspot needs `rows` (≥1) and
+      every row `answer` must match an option label, else 422; `is_correct` is
+      now optional (defaults false) so hotspot choice lists stay terse
+- [x] Grading: extract the set-equality block duplicated in `question-service`
+      and `exam-session-service` into `lib/grading.ts`, and branch there — the
+      two modes can no longer drift apart
+- [x] API: return `hotspot_rows` with `answer` **stripped** pre-answer;
+      `correct_option_ids` carries the row-ordered key (added to the session
+      result, which otherwise has no way to express a per-row answer)
+- [x] Types: widen `question_type` from `string` to a union so the compiler
+      points at every branch site instead of silently falling through to single
+- [x] UI: one `HotspotAnswerArea` used by all three renderers — practice
+      (with marks), exam (no marks), result page (read-only with marks);
+      submit gated on every row being picked; no auto-submit
+- [x] Docs: README, generate-exam, answer-exam, upload-exam-questions skill
+- [x] Verify: grading — all-correct, one-row-wrong, right multiset in the wrong
+      order, and an incomplete answer
+- [x] Verify: single/multi grading unchanged (multi still order-insensitive,
+      partial and superset both wrong)
+- [x] Verify: answer key absent from the pre-answer payloads in both modes
+- [x] Verify: practice UI — submit disabled until all rows picked, per-row
+      marks after submit, picks and marks restored on reload
+- [x] Verify: exam UI — Lock Answer gated on a complete answer, no correctness
+      leaked, locked answer round-trips through the server
+- [x] Verify: result page shows per-row marks and the score counts it once
+- [x] Verify: `tsc --noEmit` and eslint clean in both packages
+
+### Review
+Two rounds. Round 1 found the serious one: `getSessionResult` had no status
+guard, so a candidate mid-exam could `GET /exam-sessions/:id/result` and read
+the whole answer key — `options[].is_correct` had always leaked there, and this
+branch would have added the per-row hotspot key to the same payload. Now 400s
+while the session is `in_progress`; `completed` and `abandoned` still return as
+before, and a paused session stays blocked because pausing sets `paused_at`
+without changing `status`.
+
+Round 1 also caught a regression of my own: making `is_correct` optional for
+hotspot had made it optional for single/multi too, so a question that omitted it
+would have imported with zero correct options instead of 422ing. Split into two
+option schemas. Same round: `z.union` buried the real error under the other
+branch's noise (now `z.discriminatedUnion`), the result payload carried the key
+in two encodings (rows now stripped everywhere, `correct_option_ids` is the only
+one), answer-stripping was duplicated at both read paths (now one
+`publicHotspotRows` helper — the single place that rule is enforced), and
+hotspot rows stayed editable during an in-flight submit, so the per-row marks
+could describe an answer that was never graded.
+
+Found while probing, before review: a hotspot with no rows graded an empty
+submission as correct — `[] === []`. `gradeAnswer` now refuses to pass any
+question with an empty answer key, which closes the same hole for a choice
+question with nothing flagged correct.
+
+Round 2 was run twice and both agents died to an environment error, so the
+re-verification was done directly instead: 22 assertions over grading, the
+single/multi regression, answer-key confinement and import validation all pass;
+all 45 questions in the two real seed files still validate under the stricter
+schema; and the practice, exam and result flows were re-driven in the browser.
+
+Known gap left in place: single/multi imports still don't verify that `single`
+has exactly one correct option and `multi` two or more — `num_correct` has
+always silently assumed it. Pre-existing and out of scope here.

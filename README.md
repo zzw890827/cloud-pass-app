@@ -249,9 +249,36 @@ Import exam questions via `POST /api/v1/admin/import` (requires admin user).
 }
 ```
 
-- `type`: `"single"` (one correct answer) or `"multi"` (multiple correct answers)
+- `type`: `"single"` (one correct answer), `"multi"` (multiple correct answers), or `"hotspot"` (see below)
 - `external_id`: unique per exam, used for dedup on re-import
 - Re-import skips existing questions (by `external_id`), updates provider/exam metadata
+
+#### HotSpot questions
+
+A HotSpot question is an "Answer Area" table: each **row** is a statement the candidate
+assigns to one of a **shared** list of choices, and the same choice may apply to several
+rows. `options` is that shared list, so `is_correct` is omitted — each row's `answer`
+names an option **label** instead. Scoring is all-or-nothing across the rows.
+
+```json
+{
+  "external_id": "saa-002",
+  "text": "Classify each tactic by where it applies in the request lifecycle.",
+  "type": "hotspot",
+  "explanation": "Explanation text (supports **Markdown**)",
+  "options": [
+    { "label": "A", "text": "Input Preparation" },
+    { "label": "B", "text": "Prompt Construction" },
+    { "label": "C", "text": "Output Handling" }
+  ],
+  "rows": [
+    { "text": "Persist the validated output for downstream consumption.", "answer": "C" },
+    { "text": "Summarize prior conversation history.", "answer": "A" }
+  ]
+}
+```
+
+A row `answer` that matches no option label is rejected with a 422.
 
 ### Markdown Support
 

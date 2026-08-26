@@ -56,6 +56,16 @@ export interface ProgressSummary {
 }
 
 // Question
+export type QuestionType = "single" | "multi" | "hotspot";
+
+/**
+ * One row of a hotspot question's Answer Area. The correct answer is never sent
+ * to the client before the question is answered, hence `text` only.
+ */
+export interface HotspotRow {
+  text: string;
+}
+
 export interface Option {
   id: number;
   label: string;
@@ -69,7 +79,7 @@ export interface OptionWithAnswer extends Option {
 export interface QuestionListItem {
   id: number;
   external_id: string;
-  question_type: string;
+  question_type: QuestionType;
   num_correct: number;
   order_index: number;
   is_attempted: boolean;
@@ -81,9 +91,11 @@ export interface Question {
   id: number;
   external_id: string;
   question_text: string;
-  question_type: string;
+  question_type: QuestionType;
   num_correct: number;
   order_index: number;
+  /** Non-null only for hotspot questions; index-aligned with the answer array. */
+  hotspot_rows: HotspotRow[] | null;
   options: Option[];
   is_bookmarked: boolean;
   user_progress: UserProgressBrief | null;
@@ -115,7 +127,7 @@ export interface Bookmark {
   question_id: number;
   created_at: string;
   question_text: string;
-  question_type: string;
+  question_type: QuestionType;
   exam_id: number;
   exam_code?: string;
 }
@@ -171,8 +183,10 @@ export interface ExamSessionQuestionDetail {
   order_index: number;
   external_id: string;
   question_text: string;
-  question_type: string;
+  question_type: QuestionType;
   num_correct: number;
+  /** Non-null only for hotspot questions; index-aligned with the answer array. */
+  hotspot_rows: HotspotRow[] | null;
   options: SessionOption[];
   selected_option_ids: number[] | null;
   is_correct: boolean | null;
@@ -206,7 +220,14 @@ export interface SessionQuestionResult {
   question_id: number;
   external_id: string;
   question_text: string;
-  question_type: string;
+  question_type: QuestionType;
+  /** Non-null only for hotspot questions; index-aligned with the answer arrays. */
+  hotspot_rows: HotspotRow[] | null;
+  /**
+   * The answer key as option ids. Row-ordered for hotspot, where a per-row answer
+   * cannot be expressed through `options[].is_correct`.
+   */
+  correct_option_ids: number[];
   is_correct: boolean | null;
   selected_option_ids: number[] | null;
   options: SessionQuestionResultOption[];
@@ -272,7 +293,7 @@ export interface UnusedQuestionItem {
 export interface QuestionWeightItem {
   id: number;
   external_id: string;
-  question_type: string;
+  question_type: QuestionType;
   question_preview: string;
   domain_name: string | null;
   weight: number;

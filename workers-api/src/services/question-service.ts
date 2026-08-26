@@ -2,6 +2,7 @@ import { eq, and, count, sql, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { questions, options, userProgress, bookmarks } from "../db/schema";
 import { AppError } from "../lib/errors";
+import { gradeAnswer, publicHotspotRows } from "../lib/grading";
 
 // D1 limits bound parameters to 100 per query.
 // Batch inArray queries to stay under the limit.
@@ -124,6 +125,7 @@ export async function getQuestionDetail(
     question_type: question.questionType,
     num_correct: question.numCorrect,
     order_index: question.orderIndex,
+    hotspot_rows: publicHotspotRows(question),
     options: opts.map((o) => ({
       id: o.id,
       label: o.label,
@@ -156,10 +158,7 @@ export async function submitAnswer(
     .where(eq(options.questionId, questionId))
     .orderBy(options.orderIndex);
 
-  const correctIds = new Set(opts.filter((o) => o.isCorrect).map((o) => o.id));
-  const selectedSet = new Set(selectedOptionIds);
-  const isCorrect =
-    correctIds.size === selectedSet.size && [...correctIds].every((id) => selectedSet.has(id));
+  const { isCorrect, correctOptionIds } = gradeAnswer(question, opts, selectedOptionIds);
 
   // Upsert user progress
   await db
@@ -181,7 +180,8 @@ export async function submitAnswer(
 
   return {
     is_correct: isCorrect,
-    correct_option_ids: [...correctIds],
+    // For hotspot this is row-ordered: entry i is the correct option for row i.
+    correct_option_ids: correctOptionIds,
     explanation: question.explanation,
     options: opts.map((o) => ({
       id: o.id,
