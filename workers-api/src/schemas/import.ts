@@ -31,6 +31,11 @@ const hotspotQuestionSchema = z.object({
   text: z.string(),
   type: z.literal("hotspot"),
   explanation: z.string().optional().nullable(),
+  // Column headings for the Answer Area, e.g. "Statements:" and
+  // "Select Yes or No:". Optional — the table renders without a header row
+  // when they are absent.
+  row_header: z.string().optional().nullable(),
+  choice_header: z.string().optional().nullable(),
   // The shared choice list every row's dropdown offers.
   options: z.array(importHotspotOptionSchema).min(2),
   rows: z.array(importHotspotRowSchema).min(1),

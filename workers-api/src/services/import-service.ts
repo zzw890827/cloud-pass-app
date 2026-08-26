@@ -96,6 +96,8 @@ export async function importQuestions(db: Database, data: ImportPayload) {
         questionType: q.type,
         explanation: q.explanation,
         hotspotRows: q.type === "hotspot" ? JSON.stringify(q.rows) : null,
+        hotspotRowHeader: q.type === "hotspot" ? (q.row_header ?? null) : null,
+        hotspotChoiceHeader: q.type === "hotspot" ? (q.choice_header ?? null) : null,
         numCorrect,
         orderIndex: currentOrderIndex,
       })

@@ -12,7 +12,7 @@ import {
   bookmarks,
 } from "../db/schema";
 import { AppError } from "../lib/errors";
-import { correctOptionIds, gradeAnswer, publicHotspotRows } from "../lib/grading";
+import { correctOptionIds, gradeAnswer, hotspotHeaders, publicHotspotRows } from "../lib/grading";
 
 // --- Weighted question selection ---
 
@@ -580,6 +580,7 @@ export async function getSessionQuestion(
     question_type: question.questionType,
     num_correct: question.numCorrect,
     hotspot_rows: publicHotspotRows(question),
+    ...hotspotHeaders(question),
     options: opts.map((o) => ({
       id: o.id,
       label: o.label,
@@ -791,6 +792,8 @@ export async function getSessionResult(db: Database, sessionId: number, userId: 
       questionText: questions.questionText,
       questionType: questions.questionType,
       hotspotRows: questions.hotspotRows,
+      hotspotRowHeader: questions.hotspotRowHeader,
+      hotspotChoiceHeader: questions.hotspotChoiceHeader,
     })
     .from(examSessionQuestions)
     .innerJoin(questions, eq(examSessionQuestions.questionId, questions.id))
@@ -824,6 +827,7 @@ export async function getSessionResult(db: Database, sessionId: number, userId: 
       question_text: sq.questionText,
       question_type: sq.questionType,
       hotspot_rows: publicHotspotRows(sq),
+      ...hotspotHeaders(sq),
       // The answer key, row-ordered for hotspot — `options[].is_correct` cannot
       // express a per-row answer. The only encoding of it on this payload.
       correct_option_ids: correctOptionIds(sq, opts),
