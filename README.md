@@ -266,6 +266,8 @@ names an option **label** instead. Scoring is all-or-nothing across the rows.
   "text": "Classify each tactic by where it applies in the request lifecycle.",
   "type": "hotspot",
   "explanation": "Explanation text (supports **Markdown**)",
+  "row_header": "Statements:",
+  "choice_header": "Select Yes or No:",
   "options": [
     { "label": "A", "text": "Input Preparation" },
     { "label": "B", "text": "Prompt Construction" },
@@ -277,6 +279,10 @@ names an option **label** instead. Scoring is all-or-nothing across the rows.
   ]
 }
 ```
+
+`row_header` and `choice_header` are the Answer Area's column headings. Both are
+optional — the table renders without a header row if you omit them — but they carry
+most of the instruction, so set them.
 
 A row `answer` that matches no option label is rejected with a 422.
 

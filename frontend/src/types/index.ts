@@ -96,6 +96,9 @@ export interface Question {
   order_index: number;
   /** Non-null only for hotspot questions; index-aligned with the answer array. */
   hotspot_rows: HotspotRow[] | null;
+  /** Answer Area column headings, e.g. "Statements:" / "Select Yes or No:". */
+  hotspot_row_header: string | null;
+  hotspot_choice_header: string | null;
   options: Option[];
   is_bookmarked: boolean;
   user_progress: UserProgressBrief | null;
@@ -187,6 +190,9 @@ export interface ExamSessionQuestionDetail {
   num_correct: number;
   /** Non-null only for hotspot questions; index-aligned with the answer array. */
   hotspot_rows: HotspotRow[] | null;
+  /** Answer Area column headings, e.g. "Statements:" / "Select Yes or No:". */
+  hotspot_row_header: string | null;
+  hotspot_choice_header: string | null;
   options: SessionOption[];
   selected_option_ids: number[] | null;
   is_correct: boolean | null;
@@ -223,6 +229,9 @@ export interface SessionQuestionResult {
   question_type: QuestionType;
   /** Non-null only for hotspot questions; index-aligned with the answer arrays. */
   hotspot_rows: HotspotRow[] | null;
+  /** Answer Area column headings, e.g. "Statements:" / "Select Yes or No:". */
+  hotspot_row_header: string | null;
+  hotspot_choice_header: string | null;
   /**
    * The answer key as option ids. Row-ordered for hotspot, where a per-row answer
    * cannot be expressed through `options[].is_correct`.

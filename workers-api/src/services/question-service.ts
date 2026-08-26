@@ -2,7 +2,7 @@ import { eq, and, count, sql, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { questions, options, userProgress, bookmarks } from "../db/schema";
 import { AppError } from "../lib/errors";
-import { gradeAnswer, publicHotspotRows } from "../lib/grading";
+import { gradeAnswer, hotspotHeaders, publicHotspotRows } from "../lib/grading";
 
 // D1 limits bound parameters to 100 per query.
 // Batch inArray queries to stay under the limit.
@@ -126,6 +126,7 @@ export async function getQuestionDetail(
     num_correct: question.numCorrect,
     order_index: question.orderIndex,
     hotspot_rows: publicHotspotRows(question),
+    ...hotspotHeaders(question),
     options: opts.map((o) => ({
       id: o.id,
       label: o.label,

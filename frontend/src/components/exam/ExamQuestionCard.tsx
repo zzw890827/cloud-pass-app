@@ -120,6 +120,8 @@ export default function ExamQuestionCard({ question, onSubmit }: ExamQuestionCar
           picks={selected}
           // No correctOptionIds: the exam never reveals correctness before the result page.
           onChange={submitted || submitting ? undefined : pickHotspotRow}
+          rowHeader={question.hotspot_row_header}
+          choiceHeader={question.hotspot_choice_header}
         />
       ) : (
         <div className="space-y-2">

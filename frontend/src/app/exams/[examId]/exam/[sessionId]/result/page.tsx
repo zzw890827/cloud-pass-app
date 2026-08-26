@@ -55,6 +55,8 @@ function QuestionDetail({ question, index }: { question: SessionQuestionResult; 
           options={question.options}
           picks={hotspotPicks}
           correctOptionIds={question.correct_option_ids}
+          rowHeader={question.hotspot_row_header}
+          choiceHeader={question.hotspot_choice_header}
         />
       ) : (
         <div className="space-y-2">
