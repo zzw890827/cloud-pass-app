@@ -14,6 +14,7 @@ export const exams = sqliteTable(
     description: text("description"),
     totalQuestions: integer("total_questions").notNull().default(0),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    isPublic: integer("is_public", { mode: "boolean" }).notNull().default(true),
     numQuestions: integer("num_questions").notNull().default(65),
     passPercentage: integer("pass_percentage").notNull().default(75),
     timeLimitMinutes: integer("time_limit_minutes").notNull().default(180),

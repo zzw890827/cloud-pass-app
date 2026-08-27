@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ExamQuestionCard from "@/components/exam/ExamQuestionCard";
 import ExamNavigator from "@/components/exam/ExamNavigator";
 import ExamTimer from "@/components/exam/ExamTimer";
 import Spinner from "@/components/ui/Spinner";
+import ErrorState from "@/components/ui/ErrorState";
 import type { ExamSession, ExamSessionQuestionDetail } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787/api/v1";
@@ -23,6 +24,7 @@ export default function ExamSessionPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [currentQ, setCurrentQ] = useState<ExamSessionQuestionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [loadingQ, setLoadingQ] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -34,15 +36,24 @@ export default function ExamSessionPage() {
 
   useEffect(() => {
     if (!sessionId) return;
-    api.getExamSession(sessionId).then((s) => {
-      if (s.status !== "in_progress") {
-        router.replace(`/exams/${examId}/exam/${sessionId}/result`);
-        return;
-      }
-      setSession(s);
-      setPaused(!!s.paused_at);
-      setLoading(false);
-    });
+    // Reset per-session state: this component stays mounted across sessionId changes.
+    setLoading(true);
+    setError("");
+    api
+      .getExamSession(sessionId)
+      .then((s) => {
+        if (s.status !== "in_progress") {
+          router.replace(`/exams/${examId}/exam/${sessionId}/result`);
+          return;
+        }
+        setSession(s);
+        setPaused(!!s.paused_at);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        setError(errorMessage(err, "Failed to load exam session"));
+        setLoading(false);
+      });
   }, [sessionId, examId, router]);
 
   const loadQuestion = useCallback(async (idx: number) => {
@@ -181,6 +192,9 @@ export default function ExamSessionPage() {
     setNavOpen(false);
   };
 
+  if (error) {
+    return <ErrorState title="Exam session unavailable" message={error} />;
+  }
   if (loading || !session) return <Spinner className="mt-20" />;
 
   const answered = session.questions.filter((q) => q.is_answered).length;

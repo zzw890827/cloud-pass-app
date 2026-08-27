@@ -249,3 +249,92 @@ schema; and the practice, exam and result flows were re-driven in the browser.
 Known gap left in place: single/multi imports still don't verify that `single`
 has exactly one correct option and `multi` two or more — `num_correct` has
 always silently assumed it. Pre-existing and out of scope here.
+
+## User Management — per-user exam access
+
+Users could all see every exam. Adds a control column plus a grant table so an
+admin can restrict an exam to named users, managed from a new **User
+Management** screen.
+
+Access rule: `exams.is_public` OR a `user_exam_access` row OR `user.is_admin`.
+`is_public` defaults to true, so every already-imported exam stayed open — no
+backfill.
+
+- [x] `exams.is_public` column + `user_exam_access(user_id, exam_id)` table,
+      migration `0006_robust_zarek.sql`
+- [x] `lib/exam-access.ts` — one module holding the rule: `examVisibleFilter`
+      (list queries), `examIdVisibleFilter` (queries that don't join `exams`),
+      `assertExamAccess` / `assertQuestionAccess` (403), each admin-bypassing
+- [x] Enforced at every entry point: exams list/detail, providers list/detail,
+      questions list/detail/submit, progress, bookmarks (add/remove and the
+      Review list), and exam-sessions — the latter via a `/:id*` middleware on
+      the session's exam, so revoking access also stops resuming an old session
+- [x] `exam-delete-service` also drops the exam's grants (D1 has no FK enforcement)
+- [x] Admin API: `GET/PATCH /admin/users`, `PUT /admin/users/:id/exams`,
+      `PATCH /admin/exams/:id` (visibility)
+- [x] `/admin/users` page — searchable user list, Active/Admin toggles, exam
+      checkboxes grouped by provider; public exams greyed out with a badge
+- [x] Maintenance page: Public/Restricted badge + toggle per exam, link to Users
+- [x] Navbar: Users link (desktop + mobile)
+- [x] `ErrorState` + `errorMessage()` — a 403 now renders a message instead of a
+      forever-spinner on the exam, practice and session pages
+
+### Verification
+Both dev servers, migration applied locally. Restricted MLS-C01 and confirmed
+for a non-admin: hidden from `/exams`, `/providers` (the provider itself drops
+out at 0 visible exams) and the provider page; 403 on exam detail, questions
+list, question detail, submit, progress, session create, `history?exam_id=`,
+and — after revoking mid-session — on the session and its questions; the
+bookmark on that exam disappeared from `/bookmarks`. Granting reopened all of
+it. Guard rails: self-demotion 403s, unknown exam id 404s, empty patch 400s,
+deactivating a user 403s every call. Browser-verified as `final01@example.com`:
+one provider listed, granted exam fully usable, restricted exam renders
+"Exam unavailable" / "Questions unavailable". `tsc --noEmit` clean in both
+packages; eslint clean on all changed files (3 pre-existing errors in
+AuthContext/ThemeContext/QuestionNavigator, untouched).
+
+Note: `/admin/users` shows the exam checkboxes for an admin too, but they are
+inert — admins bypass grants. Left visible so a demoted admin's grants are
+already in place.
+
+### Review
+Two rounds, both clean of CRITICAL. Round 2 re-tested the whole endpoint matrix
+live as a non-admin and found no un-gated route.
+
+Round 1's real find was a D1 bound-parameter overflow in `setUserExamAccess`:
+the grant insert chunked by *row* count (95) but each row binds two parameters
+against D1's cap of 100. Granting 51+ exams 500'd, and since the UI re-sends the
+whole grant list on every checkbox toggle, that user's access would have become
+permanently uneditable. Reproduced the 500 with 60 exams, fixed by halving the
+chunk, re-verified. Round 1 also caught that the exam/practice/session pages
+never reset `error` between loads — App Router keeps the component mounted
+across a dynamic-segment change, so a 403 followed the user to an exam they
+*could* access — and that `GET /providers/:id` was ungated while the list route
+hid the same provider.
+
+Round 2 found that fix's own fallout: `providers/[providerId]` had no `.catch`,
+so the newly-possible 404 rendered a permanent spinner. Same bug in the result
+page, which `[sessionId]/page.tsx` redirects to whenever a session isn't
+in-progress. Both now use the state-tagged-by-id pattern already established in
+`exams/[examId]/history/page.tsx` — it fixes the stale-state class outright
+rather than resetting, and satisfies `react-hooks/set-state-in-effect`. The
+multi-page load in `practice/page.tsx` also got a `cancelled` guard: switching
+exams mid-load could land page A's questions under exam B's URL.
+
+Fixed while here, pre-existing and unrelated to access control:
+`deleteExam` passed every question and session id to `inArray` unchunked, so
+`DELETE /admin/exams/:id` 500'd for any exam over ~100 questions — including the
+real 107-question MLS-C01, i.e. the Maintenance Delete button was already broken
+for it. Reproduced with a 105-question throwaway exam, chunked the same way,
+re-verified the delete succeeds.
+
+Known gaps left in place:
+- A public exam's checkbox renders checked-and-disabled whether or not a grant
+  row exists, so a grant made while the exam was restricted is invisible until
+  it is restricted again. The checkbox answers "can this user reach this exam",
+  which is the more useful question.
+- `assertExamAccess` 403s for exams that don't exist, so a non-admin sees "you
+  do not have access" where an admin sees 404. No information leak.
+- Newly imported exams default to `is_public = true`, matching the migration's
+  treatment of existing rows. An import does not silently unrestrict an exam
+  that was already restricted.

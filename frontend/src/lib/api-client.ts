@@ -165,6 +165,35 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ weight }),
     }),
+  updateExamVisibility: (examId: number, isPublic: boolean) =>
+    request<{ id: number; is_public: boolean }>(`/admin/exams/${examId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_public: isPublic }),
+    }),
+
+  // Admin — user management
+  getAdminUsers: () => request<import("@/types").AdminUser[]>("/admin/users"),
+  updateAdminUser: (
+    userId: number,
+    patch: { is_active?: boolean; is_admin?: boolean }
+  ) =>
+    request<{ id: number; is_active: boolean; is_admin: boolean }>(
+      `/admin/users/${userId}`,
+      { method: "PATCH", body: JSON.stringify(patch) }
+    ),
+  setUserExamAccess: (userId: number, examIds: number[]) =>
+    request<{ user_id: number; granted_exam_ids: number[] }>(
+      `/admin/users/${userId}/exams`,
+      { method: "PUT", body: JSON.stringify({ exam_ids: examIds }) }
+    ),
 };
+
+/** Human-readable message for a failed request, with a friendlier 403 case. */
+export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
+  if (err instanceof ApiError && err.status === 403) {
+    return err.message || "You do not have access to this exam.";
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export { ApiError };

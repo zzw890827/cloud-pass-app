@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Spinner from "@/components/ui/Spinner";
+import ErrorState from "@/components/ui/ErrorState";
 import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
 import HotspotAnswerArea from "@/components/question/HotspotAnswerArea";
 import type { ExamSessionResult, SessionQuestionResult } from "@/types";
@@ -90,14 +91,32 @@ export default function ExamResultPage() {
   const examId = Number(params.examId);
   const sessionId = Number(params.sessionId);
 
-  const [result, setResult] = useState<ExamSessionResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  // State is tagged with the session it belongs to, so a change of sessionId
+  // shows a spinner again instead of rendering the previous session's result —
+  // or, once access can be revoked, its stale error.
+  const [data, setData] = useState<{ id: number; result: ExamSessionResult } | null>(null);
+  const [failed, setFailed] = useState<{ id: number; message: string } | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!sessionId) return;
-    api.getSessionResult(sessionId).then(setResult).finally(() => setLoading(false));
+    let cancelled = false;
+
+    api
+      .getSessionResult(sessionId)
+      .then((result) => {
+        if (!cancelled) setData({ id: sessionId, result });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setFailed({ id: sessionId, message: errorMessage(err, "Failed to load result") });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -106,7 +125,13 @@ export default function ExamResultPage() {
     }
   }, [selectedIdx]);
 
-  if (loading || !result) return <Spinner className="mt-20" />;
+  const result = data?.id === sessionId ? data.result : null;
+  const error = failed?.id === sessionId ? failed.message : null;
+
+  if (error) {
+    return <ErrorState title="Result unavailable" message={error} />;
+  }
+  if (!result) return <Spinner className="mt-20" />;
 
   const scoreColor = result.passed ? "text-green-600" : "text-red-600";
 

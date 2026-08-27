@@ -4,6 +4,7 @@ export { exams } from "./exams";
 export { examDomains } from "./exam-domains";
 export { questions } from "./questions";
 export { options } from "./options";
+export { userExamAccess } from "./user-exam-access";
 export { userProgress } from "./user-progress";
 export { bookmarks } from "./bookmarks";
 export { examSessions } from "./exam-sessions";
