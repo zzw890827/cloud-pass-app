@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bookmarks, questions } from "../db/schema";
 import { AppError } from "../lib/errors";
@@ -43,12 +43,18 @@ export async function removeBookmark(db: Database, userId: number, questionId: n
   await db.delete(bookmarks).where(eq(bookmarks.id, existing.id));
 }
 
+/**
+ * `visibilityFilter` (from lib/exam-access) drops bookmarks on exams the user
+ * may no longer access, so the Review screen never links into a 403.
+ */
 export async function getBookmarks(
   db: Database,
   userId: number,
-  examId?: number
+  examId?: number,
+  visibilityFilter?: SQL
 ) {
-  let condition = eq(bookmarks.userId, userId);
+  const conditions: (SQL | undefined)[] = [eq(bookmarks.userId, userId), visibilityFilter];
+  if (examId) conditions.push(eq(questions.examId, examId));
 
   const rows = await db
     .select({
@@ -61,11 +67,7 @@ export async function getBookmarks(
     })
     .from(bookmarks)
     .innerJoin(questions, eq(bookmarks.questionId, questions.id))
-    .where(
-      examId
-        ? and(condition, eq(questions.examId, examId))
-        : condition
-    )
+    .where(and(...conditions.filter((cond) => cond !== undefined)))
     .orderBy(desc(bookmarks.createdAt));
 
   return rows.map((r) => ({

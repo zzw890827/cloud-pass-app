@@ -9,8 +9,22 @@ import {
   examSessionQuestions,
   userProgress,
   bookmarks,
+  userExamAccess,
 } from "../db/schema";
 import { AppError } from "../lib/errors";
+
+// D1 caps bound parameters at 100 per statement, and an `inArray` binds one per
+// id — so an exam with more than ~100 questions or sessions needs its deletes
+// split across several statements.
+const D1_PARAM_BATCH = 95;
+
+function chunked(ids: number[]): number[][] {
+  const chunks: number[][] = [];
+  for (let i = 0; i < ids.length; i += D1_PARAM_BATCH) {
+    chunks.push(ids.slice(i, i + D1_PARAM_BATCH));
+  }
+  return chunks;
+}
 
 /**
  * Delete an exam and every row that depends on it, keeping the parent provider.
@@ -43,24 +57,25 @@ export async function deleteExam(db: Database, examId: number) {
   // Child-first order. Guard `inArray` against empty arrays (invalid SQL).
   const statements: BatchItem<"sqlite">[] = [];
 
-  if (sessionIds.length > 0) {
+  for (const chunk of chunked(sessionIds)) {
     statements.push(
-      db.delete(examSessionQuestions).where(inArray(examSessionQuestions.sessionId, sessionIds))
+      db.delete(examSessionQuestions).where(inArray(examSessionQuestions.sessionId, chunk))
     );
   }
-  if (questionIds.length > 0) {
+  for (const chunk of chunked(questionIds)) {
     // Defensive: also drop any session-question rows referencing this exam's questions.
     statements.push(
-      db.delete(examSessionQuestions).where(inArray(examSessionQuestions.questionId, questionIds))
+      db.delete(examSessionQuestions).where(inArray(examSessionQuestions.questionId, chunk))
     );
   }
   statements.push(db.delete(examSessions).where(eq(examSessions.examId, examId)));
-  if (questionIds.length > 0) {
-    statements.push(db.delete(options).where(inArray(options.questionId, questionIds)));
-    statements.push(db.delete(bookmarks).where(inArray(bookmarks.questionId, questionIds)));
-    statements.push(db.delete(userProgress).where(inArray(userProgress.questionId, questionIds)));
+  for (const chunk of chunked(questionIds)) {
+    statements.push(db.delete(options).where(inArray(options.questionId, chunk)));
+    statements.push(db.delete(bookmarks).where(inArray(bookmarks.questionId, chunk)));
+    statements.push(db.delete(userProgress).where(inArray(userProgress.questionId, chunk)));
   }
   statements.push(db.delete(questions).where(eq(questions.examId, examId)));
+  statements.push(db.delete(userExamAccess).where(eq(userExamAccess.examId, examId)));
   statements.push(db.delete(exams).where(eq(exams.id, examId)));
 
   // `statements` always has at least the two exam-level deletes above.

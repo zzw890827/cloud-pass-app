@@ -7,6 +7,17 @@ export interface User {
   is_admin: boolean;
 }
 
+/** Admin view of a user, including their per-exam grants. */
+export interface AdminUser {
+  id: number;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at: string;
+  granted_exam_ids: number[];
+}
+
 // Provider
 export interface Provider {
   id: number;
@@ -27,6 +38,7 @@ export interface ExamBrief {
   name: string;
   total_questions: number;
   is_active: boolean;
+  is_public: boolean;
 }
 
 // Exam
@@ -38,6 +50,8 @@ export interface Exam {
   description: string | null;
   total_questions: number;
   is_active: boolean;
+  /** false = restricted: only explicitly granted users may see or enter it. */
+  is_public: boolean;
   provider_name: string;
   provider_slug: string;
   num_questions: number;

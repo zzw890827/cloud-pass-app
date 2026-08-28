@@ -8,6 +8,12 @@ import {
   getQuestionWeightsPage,
   updateQuestionWeight,
 } from "../services/question-admin-service";
+import {
+  listUsersWithAccess,
+  updateUserFlags,
+  setUserExamAccess,
+  updateExamVisibility,
+} from "../services/user-admin-service";
 import { AppError } from "../lib/errors";
 
 const adminRoutes = new Hono<AppEnv>();
@@ -73,6 +79,75 @@ adminRoutes.patch("/questions/:id", async (c) => {
   }
 
   const result = await updateQuestionWeight(db, questionId, body.weight);
+  return c.json(result);
+});
+
+// PATCH /admin/exams/:id — exam visibility (public vs. grant-only)
+adminRoutes.patch("/exams/:id", async (c) => {
+  const db = c.get("db");
+  const examId = Number(c.req.param("id"));
+  if (!Number.isInteger(examId)) throw new AppError(400, "Invalid exam id");
+
+  const body = await c.req.json<{ is_public?: unknown }>().catch(() => {
+    throw new AppError(400, "Invalid JSON body");
+  });
+  if (!body || typeof body !== "object" || typeof body.is_public !== "boolean") {
+    throw new AppError(400, "is_public (boolean) is required");
+  }
+
+  const result = await updateExamVisibility(db, examId, body.is_public);
+  return c.json(result);
+});
+
+// GET /admin/users — every user with their exam grants
+adminRoutes.get("/users", async (c) => {
+  const db = c.get("db");
+  return c.json(await listUsersWithAccess(db));
+});
+
+// PATCH /admin/users/:id — is_active / is_admin
+adminRoutes.patch("/users/:id", async (c) => {
+  const db = c.get("db");
+  const actingUser = c.get("user");
+  const userId = Number(c.req.param("id"));
+  if (!Number.isInteger(userId)) throw new AppError(400, "Invalid user id");
+
+  const body = await c.req
+    .json<{ is_active?: unknown; is_admin?: unknown }>()
+    .catch(() => {
+      throw new AppError(400, "Invalid JSON body");
+    });
+  if (!body || typeof body !== "object") {
+    throw new AppError(400, "Invalid JSON body");
+  }
+  if (body.is_active !== undefined && typeof body.is_active !== "boolean") {
+    throw new AppError(400, "is_active must be a boolean");
+  }
+  if (body.is_admin !== undefined && typeof body.is_admin !== "boolean") {
+    throw new AppError(400, "is_admin must be a boolean");
+  }
+
+  const result = await updateUserFlags(db, userId, actingUser.id, {
+    isActive: body.is_active as boolean | undefined,
+    isAdmin: body.is_admin as boolean | undefined,
+  });
+  return c.json(result);
+});
+
+// PUT /admin/users/:id/exams — replace the user's exam grants
+adminRoutes.put("/users/:id/exams", async (c) => {
+  const db = c.get("db");
+  const userId = Number(c.req.param("id"));
+  if (!Number.isInteger(userId)) throw new AppError(400, "Invalid user id");
+
+  const body = await c.req.json<{ exam_ids?: unknown }>().catch(() => {
+    throw new AppError(400, "Invalid JSON body");
+  });
+  if (!body || !Array.isArray(body.exam_ids)) {
+    throw new AppError(400, "exam_ids (array of exam ids) is required");
+  }
+
+  const result = await setUserExamAccess(db, userId, body.exam_ids as number[]);
   return c.json(result);
 });
 
