@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types/env";
 import { getQuestionsPage, getQuestionDetail, submitAnswer } from "../services/question-service";
 import { AppError } from "../lib/errors";
+import { assertExamAccess, assertQuestionAccess } from "../lib/exam-access";
 
 const questionRoutes = new Hono<AppEnv>();
 
@@ -13,6 +14,8 @@ questionRoutes.get("/exams/:examId/questions", async (c) => {
   const page = Number(c.req.query("page") || "1");
   const perPage = Number(c.req.query("per_page") || "50");
 
+  await assertExamAccess(db, examId, user);
+
   const result = await getQuestionsPage(db, examId, user.id, page, perPage);
   return c.json(result);
 });
@@ -23,6 +26,8 @@ questionRoutes.get("/questions/:id", async (c) => {
   const user = c.get("user");
   const questionId = Number(c.req.param("id"));
 
+  await assertQuestionAccess(db, questionId, user);
+
   const result = await getQuestionDetail(db, questionId, user.id);
   return c.json(result);
 });
@@ -32,6 +37,9 @@ questionRoutes.post("/questions/:id/submit", async (c) => {
   const db = c.get("db");
   const user = c.get("user");
   const questionId = Number(c.req.param("id"));
+
+  await assertQuestionAccess(db, questionId, user);
+
   const body = await c.req.json<{ selected_option_ids: number[] }>();
   if (!Array.isArray(body.selected_option_ids)) {
     throw new AppError(400, "selected_option_ids must be an array");

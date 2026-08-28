@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import QuestionCard from "@/components/question/QuestionCard";
 import QuestionNavigator from "@/components/question/QuestionNavigator";
 import Spinner from "@/components/ui/Spinner";
+import ErrorState from "@/components/ui/ErrorState";
 import type { Question, QuestionListItem } from "@/types";
 
 const API_PER_PAGE = 200;
@@ -25,6 +26,7 @@ export default function PracticePage() {
   const [loading, setLoading] = useState(true);
   const [loadingQ, setLoadingQ] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [error, setError] = useState("");
 
   // Pagination state for API-level pages (200 per page)
   const [apiPage, setApiPage] = useState(1);
@@ -38,8 +40,16 @@ export default function PracticePage() {
     if (!examId) return;
     const targetId = initialQuestionId ? Number(initialQuestionId) : null;
 
+    // Reset per-exam state: this component stays mounted across examId changes,
+    // and `cancelled` keeps a superseded multi-page load from writing back.
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    initialIdxSet.current = false;
+
     (async () => {
       const firstPage = await api.getQuestions(examId, 1, API_PER_PAGE);
+      if (cancelled) return;
       let allItems = firstPage.items;
       let loadedPage = 1;
       setTotalApiPages(firstPage.total_pages);
@@ -53,6 +63,7 @@ export default function PracticePage() {
         ) {
           loadedPage++;
           const nextPage = await api.getQuestions(examId, loadedPage, API_PER_PAGE);
+          if (cancelled) return;
           allItems = [...allItems, ...nextPage.items];
         }
         const idx = allItems.findIndex((q) => q.id === targetId);
@@ -63,7 +74,15 @@ export default function PracticePage() {
       setQuestions(allItems);
       setApiPage(loadedPage);
       setLoading(false);
-    })();
+    })().catch((err: unknown) => {
+      if (cancelled) return;
+      setError(errorMessage(err, "Failed to load questions"));
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [examId, initialQuestionId]);
 
   // Auto-fetch next API page when user reaches the last navigator page (50-item page)
@@ -148,6 +167,10 @@ export default function PracticePage() {
   const attempted = questions.filter((q) => q.is_attempted).length;
 
   if (loading) return <Spinner className="mt-20" />;
+
+  if (error) {
+    return <ErrorState title="Questions unavailable" message={error} />;
+  }
 
   if (questions.length === 0) {
     return <p className="text-gray-500 mt-10">No questions available for this exam.</p>;

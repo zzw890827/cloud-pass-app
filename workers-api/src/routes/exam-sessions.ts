@@ -1,6 +1,10 @@
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
+import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../types/env";
+import { examSessions } from "../db/schema";
 import { AppError } from "../lib/errors";
+import { assertExamAccess } from "../lib/exam-access";
 import {
   createSession,
   getSession,
@@ -26,6 +30,30 @@ function requireExamIdQuery(c: { req: { query: (k: string) => string | undefined
   return id;
 }
 
+/**
+ * Gate every `/:id...` route on the session's exam, so revoking a user's access
+ * also stops them resuming or reviewing a session they had already started.
+ */
+const sessionExamAccess = createMiddleware<AppEnv>(async (c, next) => {
+  const sessionId = Number(c.req.param("id"));
+  // The literal routes (/active, /history, ...) also match `/:id`; skip those.
+  if (!Number.isInteger(sessionId)) return next();
+
+  const session = await c.get("db").query.examSessions.findFirst({
+    where: eq(examSessions.id, sessionId),
+    columns: { examId: true },
+  });
+  // Unknown session: let the service raise its own 404.
+  if (session) {
+    await assertExamAccess(c.get("db"), session.examId, c.get("user"));
+  }
+
+  await next();
+});
+
+sessionRoutes.use("/:id", sessionExamAccess);
+sessionRoutes.use("/:id/*", sessionExamAccess);
+
 // POST /exam-sessions
 sessionRoutes.post("/", async (c) => {
   const db = c.get("db");
@@ -34,6 +62,8 @@ sessionRoutes.post("/", async (c) => {
   if (!body.exam_id || typeof body.exam_id !== "number") {
     throw new AppError(400, "exam_id is required");
   }
+
+  await assertExamAccess(db, body.exam_id, user);
 
   const result = await createSession(db, user.id, body.exam_id);
   return c.json(result, 201);
@@ -45,6 +75,8 @@ sessionRoutes.get("/active", async (c) => {
   const user = c.get("user");
   const examId = requireExamIdQuery(c);
 
+  await assertExamAccess(db, examId, user);
+
   const result = await getActiveSession(db, user.id, examId);
   return c.json(result);
 });
@@ -54,6 +86,8 @@ sessionRoutes.get("/history", async (c) => {
   const db = c.get("db");
   const user = c.get("user");
   const examId = requireExamIdQuery(c);
+
+  await assertExamAccess(db, examId, user);
 
   const result = await getSessionHistory(db, user.id, examId);
   return c.json(result);
@@ -65,6 +99,8 @@ sessionRoutes.get("/error-report", async (c) => {
   const user = c.get("user");
   const examId = requireExamIdQuery(c);
 
+  await assertExamAccess(db, examId, user);
+
   const result = await getErrorReport(db, user.id, examId);
   return c.json(result);
 });
@@ -74,6 +110,8 @@ sessionRoutes.get("/unused-questions", async (c) => {
   const db = c.get("db");
   const user = c.get("user");
   const examId = requireExamIdQuery(c);
+
+  await assertExamAccess(db, examId, user);
 
   const result = await getUnusedQuestions(db, user.id, examId);
   return c.json(result);

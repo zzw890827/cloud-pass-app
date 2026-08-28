@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, errorMessage } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ProgressSummaryComponent from "@/components/exam/ProgressSummary";
 import Spinner from "@/components/ui/Spinner";
+import ErrorState from "@/components/ui/ErrorState";
 import type { Exam } from "@/types";
 
 export default function ExamOverviewPage() {
@@ -15,11 +16,31 @@ export default function ExamOverviewPage() {
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const id = Number(params.examId);
     if (!id) return;
-    api.getExam(id).then(setExam).finally(() => setLoading(false));
+    // Reset per-exam state: this component stays mounted across examId changes,
+    // and `cancelled` keeps a superseded response from writing back.
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    api
+      .getExam(id)
+      .then((e) => {
+        if (!cancelled) setExam(e);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(errorMessage(err, "Failed to load exam"));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [params.examId]);
 
   const handleReset = async () => {
@@ -37,14 +58,16 @@ export default function ExamOverviewPage() {
       const session = await api.createExamSession(exam.id);
       router.push(`/exams/${exam.id}/exam/${session.id}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to start exam";
-      alert(msg);
+      alert(errorMessage(err, "Failed to start exam"));
     } finally {
       setStarting(false);
     }
   };
 
-  if (loading || !exam) return <Spinner className="mt-20" />;
+  if (loading) return <Spinner className="mt-20" />;
+  if (error || !exam) {
+    return <ErrorState title="Exam unavailable" message={error || "Exam not found."} />;
+  }
 
   const hasActiveSession = !!exam.active_session_id;
 

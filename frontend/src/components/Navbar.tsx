@@ -35,6 +35,9 @@ export default function Navbar() {
                     <Link href="/admin/maintenance" className="text-sm text-gray-600 hover:text-gray-900">
                       Maintenance
                     </Link>
+                    <Link href="/admin/users" className="text-sm text-gray-600 hover:text-gray-900">
+                      Users
+                    </Link>
                   </>
                 )}
               </div>
@@ -83,6 +86,9 @@ export default function Navbar() {
                 </Link>
                 <Link href="/admin/maintenance" onClick={closeMenu} className="block px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
                   Maintenance
+                </Link>
+                <Link href="/admin/users" onClick={closeMenu} className="block px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100">
+                  Users
                 </Link>
               </>
             )}

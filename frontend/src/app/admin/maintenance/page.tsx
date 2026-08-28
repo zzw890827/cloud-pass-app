@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +22,7 @@ export default function MaintenancePage() {
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [visibilityId, setVisibilityId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState<DeleteExamResult | null>(null);
 
@@ -45,6 +47,22 @@ export default function MaintenancePage() {
   const cancelConfirm = () => {
     setConfirmingId(null);
     setConfirmText("");
+  };
+
+  const toggleVisibility = async (exam: Exam) => {
+    const next = !exam.is_public;
+    setError("");
+    setVisibilityId(exam.id);
+    try {
+      await api.updateExamVisibility(exam.id, next);
+      setExams((prev) =>
+        prev.map((e) => (e.id === exam.id ? { ...e, is_public: next } : e))
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update visibility");
+    } finally {
+      setVisibilityId(null);
+    }
   };
 
   const handleDelete = async (exam: Exam) => {
@@ -75,10 +93,15 @@ export default function MaintenancePage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Maintenance</h1>
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
+        <Link href="/admin/users" className="text-sm text-accent-600 hover:underline">
+          User Management
+        </Link>
+      </div>
       <p className="text-sm text-gray-500 mb-6">
-        Delete an exam and all of its related data (questions, options, sessions,
-        answers, and bookmarks). This cannot be undone.
+        Set who may take each exam, or delete an exam and all of its related data (questions,
+        options, sessions, answers, and bookmarks). Deleting cannot be undone.
       </p>
 
       {result && (
@@ -112,12 +135,32 @@ export default function MaintenancePage() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-900">{exam.code}</span>
                       <Badge>{exam.total_questions} Q</Badge>
+                      <Badge color={exam.is_public ? "green" : "yellow"}>
+                        {exam.is_public ? "Public" : "Restricted"}
+                      </Badge>
                     </div>
                     <p className="text-sm text-gray-600 truncate">{exam.name}</p>
                     <p className="text-xs text-gray-400">{exam.provider_name}</p>
                   </div>
                   {!isConfirming && (
                     <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => toggleVisibility(exam)}
+                        disabled={visibilityId === exam.id}
+                        title={
+                          exam.is_public
+                            ? "Restrict to granted users only"
+                            : "Open to every user"
+                        }
+                      >
+                        {visibilityId === exam.id
+                          ? "Saving..."
+                          : exam.is_public
+                            ? "Restrict"
+                            : "Make public"}
+                      </Button>
                       <Button
                         variant="secondary"
                         size="sm"
