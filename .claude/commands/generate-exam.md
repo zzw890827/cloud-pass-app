@@ -34,6 +34,7 @@ Each single/multi question must match this exact schema:
   "text": "string — question text (supports Markdown)",
   "type": "single | multi",
   "explanation": "string — detailed explanation (supports Markdown)",
+  "domain": "string (optional) — a domain `code` from exam.domains",
   "options": [
     {
       "label": "A",
@@ -102,10 +103,19 @@ The full import file schema:
     "num_questions": "number",
     "pass_percentage": "number",
     "time_limit_minutes": "number",
+    "domains": [
+      { "code": "string — stable key", "name": "string", "weight": "number — relative weight", "order_index": "number (optional)" }
+    ],
     "questions": [ ... ]
   }
 }
 ```
+
+`domains` is optional. Declare it when the exam guide splits content into domains, and give
+every question (HotSpot too) a `domain` referencing one of the codes. Admins can only limit
+a user to certain domains, and exam mode can only draw by domain weight, when questions have
+a domain. Re-importing with `domain` set backfills it on questions that already exist. An
+unknown or duplicated domain code makes the import return 422 before anything is written.
 
 ## Step 3: Save to file
 
