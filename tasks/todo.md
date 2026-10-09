@@ -338,3 +338,50 @@ Known gaps left in place:
 - Newly imported exams default to `is_public = true`, matching the migration's
   treatment of existing rows. An import does not silently unrestrict an exam
   that was already restricted.
+
+---
+
+# Feature: Per-user domain restriction + exam-mode permission
+
+Decisions (confirmed with user 2026-10-09):
+- Domain restriction is per (user, exam); no rows = all domains visible. Applies to public and restricted exams.
+- When restricted, questions with `domain_id = NULL` are hidden (whitelist semantics).
+- Exam mode is a global per-user flag `users.can_use_exam_mode`, default true.
+- Exam mode draws only from the allowed domains (quotas re-normalised over allowed domains).
+- Admins bypass both (consistent with existing exam-access rule).
+
+## Backend (workers-api)
+- [x] Schema: `users.can_use_exam_mode` (bool, default true)
+- [x] Schema: new table `user_exam_domain_access(user_id, exam_id, domain_id)`, unique (user_id, domain_id), index (user_id, exam_id). `exam_id` stored so a deleted domain fails closed.
+- [x] Migration 0007 via `npm run db:generate`
+- [x] `lib/exam-access.ts`: `questionDomainVisibleFilter(user)` SQL (EXISTS-based, no inArray); extend `assertQuestionAccess` to check domain; `assertExamModeAllowed(user)`
+- [x] Apply domain filter: practice question list + total, question detail/submit, bookmarks add/remove/list, progress summary/detail, exam detail domain list, unused-questions, weighted selection in `createSession`
+- [x] Exam mode gate: 403 on create session, get session question, submit, resume (pause/complete/abandon/result/history still allowed)
+- [x] Auth: put `canUseExamMode` on context user, expose `can_use_exam_mode` in `/auth/me`
+- [x] Admin API: PATCH `/admin/users/:id` accepts `can_use_exam_mode`; `GET /admin/users` returns `can_use_exam_mode` + `domain_restrictions` ({exam_id: domain_ids}); `PUT /admin/users/:id/exams/:examId/domains {domain_ids}` (empty = unrestricted, validates domains belong to exam); `GET /admin/exam-domains`
+- [x] `deleteExam` also clears `user_exam_domain_access`
+
+## Frontend
+- [x] Types + api-client for the new fields/endpoints
+- [x] `/admin/users`: "Exam mode" toggle; per-exam "Domains" expander with checkboxes and an "All domains / N of M" summary
+- [x] Exam overview: hide Start/Resume Exam and show a note when exam mode is disabled
+
+## Verification
+- [x] `tsc --noEmit` + eslint in both packages
+- [x] Local wrangler dev: as non-admin with restriction, check practice list/total, detail 403 on hidden domain, exam session draws only allowed domains, exam mode 403
+- [x] Admin UI check in browser
+- [x] code-reviewer loop until no CRITICAL/IMPORTANT
+
+Known non-goal: sessions completed before a restriction was added stay reviewable as-is (result / error report).
+
+## Review (2026-10-09)
+- Implemented as planned. Migration: `workers-api/drizzle/0007_modern_metal_master.sql` (applied locally only — prod is applied by CI on deploy).
+- Deviations from plan, from code review:
+  - `user_exam_domain_access.domain_id` has no FK, so a deleted domain can never cascade a restriction away.
+  - `visibleQuestionCountFor` nests its SQL so drizzle qualifies columns (bare top-level select `sql` renders unqualified on un-joined queries → wrong counts).
+  - Provider detail count also domain-filtered.
+  - Narrowing a user's domains abandons their in-progress session for that exam if it holds a now-hidden question (otherwise the session would keep serving hidden questions).
+  - Exam overview offers "Abandon" when exam mode is off and a session is active.
+- Verification: tsc (both packages), eslint on changed frontend files, 46-check API e2e script against local wrangler dev, headless-Chrome check of /admin/users (as admin) and the exam overview (as restricted user).
+- Review loop: round 1 → 2 IMPORTANT + 7 MINOR (all fixed except cosmetic #7); round 2 → 0 CRITICAL/IMPORTANT, 2 MINOR (fixed).
+- Pre-existing, out of scope: `deleteExam` does not delete `exam_domains` rows; 3 pre-existing eslint errors (QuestionNavigator, AuthContext, ThemeContext).

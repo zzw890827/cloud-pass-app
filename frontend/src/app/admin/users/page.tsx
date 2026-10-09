@@ -8,14 +8,17 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Spinner from "@/components/ui/Spinner";
-import type { AdminUser, Exam } from "@/types";
+import type { AdminExamDomain, AdminUser, Exam } from "@/types";
 
-type Flag = "is_active" | "is_admin";
+type Flag = "is_active" | "is_admin" | "can_use_exam_mode";
 
 export default function UserManagementPage() {
   const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [domains, setDomains] = useState<AdminExamDomain[]>([]);
+  // Exam whose domain picker is open in the detail pane.
+  const [openExamId, setOpenExamId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -24,10 +27,11 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (authLoading || !user?.is_admin) return;
-    Promise.all([api.getAdminUsers(), api.getExams()])
-      .then(([userList, examList]) => {
+    Promise.all([api.getAdminUsers(), api.getExams(), api.getAdminExamDomains()])
+      .then(([userList, examList, domainList]) => {
         setUsers(userList);
         setExams(examList);
+        setDomains(domainList);
         setSelectedId((prev) => prev ?? userList[0]?.id ?? null);
       })
       .catch((err: unknown) =>
@@ -68,6 +72,16 @@ export default function UserManagementPage() {
       ] as [string, Exam[]]);
   }, [exams]);
 
+  const domainsByExam = useMemo(() => {
+    const groups = new Map<number, AdminExamDomain[]>();
+    for (const d of domains) {
+      const list = groups.get(d.exam_id);
+      if (list) list.push(d);
+      else groups.set(d.exam_id, [d]);
+    }
+    return groups;
+  }, [domains]);
+
   const patchUser = (userId: number, patch: Partial<AdminUser>) =>
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
 
@@ -105,6 +119,42 @@ export default function UserManagementPage() {
     }
   };
 
+  /**
+   * Toggle one domain in `target`'s whitelist for `examId`. Checking every
+   * domain lifts the restriction (stored as an empty list); the last checked
+   * domain cannot be unchecked — revoke the exam itself for that.
+   */
+  const toggleDomain = async (target: AdminUser, examId: number, domainId: number) => {
+    const all = (domainsByExam.get(examId) ?? []).map((d) => d.id);
+    // Drop ids of domains that no longer exist: they would fail validation on
+    // save and skew the "everything checked" test below.
+    const current = (target.domain_restrictions[examId] ?? all).filter((id) => all.includes(id));
+    const toggled = current.includes(domainId)
+      ? current.filter((id) => id !== domainId)
+      : [...current, domainId];
+    if (toggled.length === 0) return;
+    await saveDomains(target, examId, toggled.length >= all.length ? [] : toggled);
+  };
+
+  const saveDomains = async (target: AdminUser, examId: number, next: number[]) => {
+    const previous = target.domain_restrictions;
+    const restrictions = { ...previous };
+    if (next.length === 0) delete restrictions[examId];
+    else restrictions[examId] = next;
+
+    setError("");
+    setSaving(true);
+    patchUser(target.id, { domain_restrictions: restrictions });
+    try {
+      await api.setUserExamDomains(target.id, examId, next);
+    } catch (err: unknown) {
+      patchUser(target.id, { domain_restrictions: previous });
+      setError(err instanceof Error ? err.message : "Failed to update domain access");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (authLoading) return <Spinner className="mt-20" />;
   if (!user?.is_admin) return <p className="text-red-500 mt-10">Admin access required.</p>;
 
@@ -122,7 +172,8 @@ export default function UserManagementPage() {
         <Link href="/admin/maintenance" className="text-accent-600 hover:underline">
           Maintenance
         </Link>{" "}
-        page first.
+        page first. Within any exam a user can access, you can also limit which domains they see,
+        and turn exam mode off per user.
       </p>
 
       {error && (
@@ -150,7 +201,10 @@ export default function UserManagementPage() {
               {shownUsers.map((u) => (
                 <li key={u.id}>
                   <button
-                    onClick={() => setSelectedId(u.id)}
+                    onClick={() => {
+                      setSelectedId(u.id);
+                      setOpenExamId(null);
+                    }}
                     className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                       u.id === selectedId ? "bg-accent-50 text-accent-700" : "hover:bg-gray-100"
                     }`}
@@ -159,6 +213,7 @@ export default function UserManagementPage() {
                     <span className="mt-1 flex items-center gap-1.5">
                       {u.is_admin && <Badge color="accent">Admin</Badge>}
                       {!u.is_active && <Badge color="red">Inactive</Badge>}
+                      {!u.is_admin && !u.can_use_exam_mode && <Badge>No exam mode</Badge>}
                       {!u.is_admin && (
                         <span className="text-xs text-gray-400">
                           {u.granted_exam_ids.length} granted
@@ -200,10 +255,22 @@ export default function UserManagementPage() {
                   busy={saving}
                   onToggle={() => toggleFlag(selected, "is_admin")}
                 />
+                <FlagToggle
+                  label="Exam mode"
+                  on={selected.can_use_exam_mode}
+                  self={false}
+                  busy={saving}
+                  onToggle={() => toggleFlag(selected, "can_use_exam_mode")}
+                />
               </div>
               {selected.id === user.id && (
                 <p className="mt-2 text-xs text-gray-400">
                   You cannot change your own Active or Admin status.
+                </p>
+              )}
+              {selected.is_admin && (
+                <p className="mt-2 text-xs text-gray-400">
+                  Admins can always use exam mode and see every domain.
                 </p>
               )}
 
@@ -226,35 +293,117 @@ export default function UserManagementPage() {
                         {providerName}
                       </p>
                       <ul className="space-y-1">
-                        {providerExams.map((exam) => (
-                          <li key={exam.id}>
-                            <label
-                              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${
-                                exam.is_public
-                                  ? "opacity-50"
-                                  : "hover:bg-gray-50 cursor-pointer"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500"
-                                checked={
-                                  exam.is_public ||
-                                  selected.granted_exam_ids.includes(exam.id)
-                                }
-                                disabled={exam.is_public || saving}
-                                onChange={() => toggleExam(selected, exam.id)}
-                              />
-                              <span className="text-sm font-medium text-gray-900">
-                                {exam.code}
-                              </span>
-                              <span className="text-sm text-gray-500 truncate">{exam.name}</span>
-                              {exam.is_public && (
-                                <Badge className="ml-auto shrink-0">Public</Badge>
+                        {providerExams.map((exam) => {
+                          const accessible =
+                            exam.is_public || selected.granted_exam_ids.includes(exam.id);
+                          const examDomains = domainsByExam.get(exam.id) ?? [];
+                          const allowed = selected.domain_restrictions[exam.id];
+                          const allowedCount = allowed
+                            ? examDomains.filter((d) => allowed.includes(d.id)).length
+                            : examDomains.length;
+                          const open = openExamId === exam.id;
+                          return (
+                            <li key={exam.id}>
+                              <div className="flex items-center gap-2">
+                                <label
+                                  className={`flex flex-1 min-w-0 items-center gap-2.5 px-2 py-1.5 rounded-lg ${
+                                    exam.is_public
+                                      ? "opacity-50"
+                                      : "hover:bg-gray-50 cursor-pointer"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500"
+                                    checked={
+                                      exam.is_public ||
+                                      selected.granted_exam_ids.includes(exam.id)
+                                    }
+                                    disabled={exam.is_public || saving}
+                                    onChange={() => toggleExam(selected, exam.id)}
+                                  />
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {exam.code}
+                                  </span>
+                                  <span className="text-sm text-gray-500 truncate">{exam.name}</span>
+                                  {exam.is_public && (
+                                    <Badge className="ml-auto shrink-0">Public</Badge>
+                                  )}
+                                </label>
+                                {/* Domain whitelist — only meaningful once the user can open the exam */}
+                                {!selected.is_admin && accessible && examDomains.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenExamId(open ? null : exam.id)}
+                                    aria-expanded={open}
+                                    className={`shrink-0 text-xs px-2 py-1 rounded-md border transition-colors ${
+                                      allowed
+                                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                                        : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {allowed
+                                      ? `${allowedCount} of ${examDomains.length} domains`
+                                      : "All domains"}{" "}
+                                    {open ? "▴" : "▾"}
+                                  </button>
+                                )}
+                              </div>
+                              {open && !selected.is_admin && accessible && examDomains.length > 0 && (
+                                <div className="ml-8 mt-1 mb-2 p-2 rounded-lg bg-gray-50">
+                                  <ul className="space-y-1">
+                                    {examDomains.map((d) => {
+                                      const checked = !allowed || allowed.includes(d.id);
+                                      // The last checked box cannot be cleared — revoke the exam instead.
+                                      const isLast = checked && allowedCount === 1;
+                                      return (
+                                        <li key={d.id}>
+                                          <label
+                                            className="flex items-center gap-2.5 px-2 py-1 rounded-md hover:bg-white cursor-pointer"
+                                            title={
+                                              isLast
+                                                ? "At least one domain must stay selected — revoke the exam instead"
+                                                : undefined
+                                            }
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              className="h-4 w-4 rounded border-gray-300 text-accent-600 focus:ring-accent-500"
+                                              checked={checked}
+                                              disabled={saving || isLast}
+                                              onChange={() => toggleDomain(selected, exam.id, d.id)}
+                                            />
+                                            <span className="text-sm text-gray-900">{d.name}</span>
+                                            <span className="text-xs font-mono text-gray-400">
+                                              {d.code}
+                                            </span>
+                                          </label>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                  <div className="mt-2 flex items-center justify-between gap-2 px-2">
+                                    <p className="text-xs text-gray-400">
+                                      {allowed
+                                        ? "Questions outside the selected domains (and without a domain) are hidden from this user. An in-progress exam holding hidden questions is abandoned when you narrow the selection."
+                                        : "Unrestricted. Uncheck a domain to hide its questions (abandons an in-progress exam that holds them)."}
+                                    </p>
+                                    {allowed && (
+                                      <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => saveDomains(selected, exam.id, [])}
+                                        className="shrink-0 text-xs text-accent-600 hover:underline disabled:opacity-50"
+                                      >
+                                        Allow all
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               )}
-                            </label>
-                          </li>
-                        ))}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   ))}

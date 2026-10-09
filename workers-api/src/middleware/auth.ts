@@ -46,6 +46,7 @@ export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     displayName: user.displayName,
     isActive: user.isActive,
     isAdmin: user.isAdmin,
+    canUseExamMode: user.canUseExamMode,
   });
 
   await next();

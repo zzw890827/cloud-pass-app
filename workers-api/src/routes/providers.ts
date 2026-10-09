@@ -3,7 +3,7 @@ import { eq, and, count } from "drizzle-orm";
 import type { AppEnv } from "../types/env";
 import { providers, exams } from "../db/schema";
 import { AppError } from "../lib/errors";
-import { examVisibleFilterFor } from "../lib/exam-access";
+import { examVisibleFilterFor, visibleQuestionCountFor } from "../lib/exam-access";
 
 const providerRoutes = new Hono<AppEnv>();
 
@@ -66,7 +66,7 @@ providerRoutes.get("/:id", async (c) => {
       id: exams.id,
       code: exams.code,
       name: exams.name,
-      totalQuestions: exams.totalQuestions,
+      totalQuestions: visibleQuestionCountFor(user),
       isActive: exams.isActive,
       isPublic: exams.isPublic,
     })
