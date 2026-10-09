@@ -9,6 +9,7 @@ export const users = sqliteTable(
     displayName: text("display_name").notNull(),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+    canUseExamMode: integer("can_use_exam_mode", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),

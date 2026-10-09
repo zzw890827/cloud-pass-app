@@ -4,7 +4,13 @@ import type { AppEnv } from "../types/env";
 import { exams, examDomains, questions, providers, examSessions } from "../db/schema";
 import { getProgressSummary } from "../services/progress-service";
 import { AppError } from "../lib/errors";
-import { assertExamAccess, examVisibleFilterFor } from "../lib/exam-access";
+import {
+  assertExamAccess,
+  domainVisibleFilter,
+  examVisibleFilterFor,
+  questionDomainFilterFor,
+  visibleQuestionCountFor,
+} from "../lib/exam-access";
 
 const examRoutes = new Hono<AppEnv>();
 
@@ -25,7 +31,7 @@ examRoutes.get("/", async (c) => {
       code: exams.code,
       name: exams.name,
       description: exams.description,
-      totalQuestions: exams.totalQuestions,
+      totalQuestions: visibleQuestionCountFor(user),
       isActive: exams.isActive,
       isPublic: exams.isPublic,
       numQuestions: exams.numQuestions,
@@ -75,7 +81,7 @@ examRoutes.get("/:id", async (c) => {
       code: exams.code,
       name: exams.name,
       description: exams.description,
-      totalQuestions: exams.totalQuestions,
+      totalQuestions: visibleQuestionCountFor(user),
       isActive: exams.isActive,
       isPublic: exams.isPublic,
       numQuestions: exams.numQuestions,
@@ -91,9 +97,15 @@ examRoutes.get("/:id", async (c) => {
   if (rows.length === 0) throw new AppError(404, "Exam not found");
   const exam = rows[0];
 
-  const progressSummary = await getProgressSummary(db, examId, user.id);
+  const progressSummary = await getProgressSummary(
+    db,
+    examId,
+    user.id,
+    questionDomainFilterFor(user)
+  );
 
-  // Content domains (with per-domain question counts). Empty for exams without domains.
+  // Content domains (with per-domain question counts), limited to the ones the
+  // user may see. Empty for exams without domains.
   const domainRows = await db
     .select({
       id: examDomains.id,
@@ -104,7 +116,12 @@ examRoutes.get("/:id", async (c) => {
     })
     .from(examDomains)
     .leftJoin(questions, eq(questions.domainId, examDomains.id))
-    .where(eq(examDomains.examId, examId))
+    .where(
+      and(
+        eq(examDomains.examId, examId),
+        user.isAdmin ? undefined : domainVisibleFilter(examDomains.examId, examDomains.id, user.id)
+      )
+    )
     .groupBy(examDomains.id)
     .orderBy(examDomains.orderIndex);
 

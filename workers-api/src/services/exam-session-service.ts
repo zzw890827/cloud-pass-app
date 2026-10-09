@@ -1,4 +1,4 @@
-import { eq, and, sql, count, inArray, notInArray, desc, asc } from "drizzle-orm";
+import { eq, and, sql, count, inArray, notInArray, desc, asc, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   exams,
@@ -162,11 +162,17 @@ function allocateByWeightWithCaps(
   return alloc;
 }
 
+/**
+ * `domainFilter` (from lib/exam-access) drops questions in domains hidden from
+ * the user. Hidden domains then have no capacity, so their quota is
+ * redistributed across the allowed ones by `allocateByWeightWithCaps`.
+ */
 async function selectWeightedQuestions(
   db: Database,
   examId: number,
   userId: number,
-  numToSelect: number
+  numToSelect: number,
+  domainFilter?: SQL
 ): Promise<number[]> {
   // 5 parallel queries
   const [allQuestions, historyRows, practiceRows, bookmarkRows, domainRows] = await Promise.all([
@@ -178,7 +184,7 @@ async function selectWeightedQuestions(
         manualWeight: questions.weight,
       })
       .from(questions)
-      .where(eq(questions.examId, examId)),
+      .where(and(eq(questions.examId, examId), domainFilter)),
 
     // 2. Exam session history with correctCount, lastAnsweredAt, lastWasCorrect
     db
@@ -458,7 +464,12 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 // --- Session CRUD ---
 
-export async function createSession(db: Database, userId: number, examId: number) {
+export async function createSession(
+  db: Database,
+  userId: number,
+  examId: number,
+  domainFilter?: SQL
+) {
   // Check exam exists
   const exam = await db.query.exams.findFirst({
     where: eq(exams.id, examId),
@@ -476,14 +487,20 @@ export async function createSession(db: Database, userId: number, examId: number
   if (active) throw new AppError(409, "An active session already exists for this exam");
 
   // Select questions
-  const questionIds = await selectWeightedQuestions(db, examId, userId, exam.numQuestions);
+  const questionIds = await selectWeightedQuestions(
+    db,
+    examId,
+    userId,
+    exam.numQuestions,
+    domainFilter
+  );
 
   // Refuse rather than open a session with nothing in it — an empty session
   // would still block the exam behind the "already active" check above.
   if (questionIds.length === 0) {
     throw new AppError(
       422,
-      "This exam has no questions available to draw. Check that not every question is excluded by its weight."
+      "This exam has no questions available to draw. Check that not every question is excluded by its weight or hidden by a domain restriction."
     );
   }
 
@@ -952,7 +969,12 @@ const MAX_UNUSED_ITEMS = 200;
  * session was abandoned or is still in progress). Practice-mode answers do not
  * count as a draw.
  */
-export async function getUnusedQuestions(db: Database, userId: number, examId: number) {
+export async function getUnusedQuestions(
+  db: Database,
+  userId: number,
+  examId: number,
+  domainFilter?: SQL
+) {
   const exam = await db.query.exams.findFirst({
     where: eq(exams.id, examId),
   });
@@ -968,6 +990,7 @@ export async function getUnusedQuestions(db: Database, userId: number, examId: n
 
   const isUnused = and(
     eq(questions.examId, examId),
+    domainFilter,
     notInArray(questions.id, usedQuestionIds)
   );
 
@@ -986,7 +1009,7 @@ export async function getUnusedQuestions(db: Database, userId: number, examId: n
   const [totalRow] = await db
     .select({ total: count() })
     .from(questions)
-    .where(eq(questions.examId, examId));
+    .where(and(eq(questions.examId, examId), domainFilter));
 
   const [unusedRow] = await db
     .select({ total: count() })

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, errorMessage } from "@/lib/api-client";
+import { useAuth } from "@/context/AuthContext";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ProgressSummaryComponent from "@/components/exam/ProgressSummary";
@@ -13,6 +14,7 @@ import type { Exam } from "@/types";
 export default function ExamOverviewPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -51,6 +53,17 @@ export default function ExamOverviewPage() {
     setExam(updated);
   };
 
+  const handleAbandonExam = async () => {
+    if (!exam?.active_session_id) return;
+    if (!confirm("Abandon your in-progress exam? It will not be scored.")) return;
+    try {
+      await api.abandonExamSession(exam.active_session_id);
+      setExam(await api.getExam(exam.id));
+    } catch (err: unknown) {
+      alert(errorMessage(err, "Failed to abandon exam"));
+    }
+  };
+
   const handleStartExam = async () => {
     if (!exam || starting) return;
     setStarting(true);
@@ -70,6 +83,8 @@ export default function ExamOverviewPage() {
   }
 
   const hasActiveSession = !!exam.active_session_id;
+  // `can_use_exam_mode` is already true for admins (effective permission).
+  const examModeAllowed = !!user?.can_use_exam_mode;
 
   return (
     <div className="max-w-2xl">
@@ -108,7 +123,7 @@ export default function ExamOverviewPage() {
 
       <div className="flex flex-wrap gap-3 mt-6">
         {/* Exam mode */}
-        {hasActiveSession ? (
+        {!examModeAllowed ? null : hasActiveSession ? (
           <Button onClick={() => router.push(`/exams/${exam.id}/exam/${exam.active_session_id}`)}>
             Resume Exam
           </Button>
@@ -136,6 +151,24 @@ export default function ExamOverviewPage() {
           </Button>
         )}
       </div>
+
+      {user && !examModeAllowed && (
+        <p className="text-sm text-gray-500 mt-3">
+          Exam mode is not enabled for your account. Ask an administrator if you need it.
+          {hasActiveSession && (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={handleAbandonExam}
+                className="text-accent-600 hover:underline"
+              >
+                Abandon your in-progress exam
+              </button>
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }

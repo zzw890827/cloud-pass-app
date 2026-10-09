@@ -4,7 +4,11 @@ import { createMiddleware } from "hono/factory";
 import type { AppEnv } from "../types/env";
 import { examSessions } from "../db/schema";
 import { AppError } from "../lib/errors";
-import { assertExamAccess } from "../lib/exam-access";
+import {
+  assertExamAccess,
+  assertExamModeAllowed,
+  questionDomainFilterFor,
+} from "../lib/exam-access";
 import {
   createSession,
   getSession,
@@ -63,9 +67,10 @@ sessionRoutes.post("/", async (c) => {
     throw new AppError(400, "exam_id is required");
   }
 
+  assertExamModeAllowed(user);
   await assertExamAccess(db, body.exam_id, user);
 
-  const result = await createSession(db, user.id, body.exam_id);
+  const result = await createSession(db, user.id, body.exam_id, questionDomainFilterFor(user));
   return c.json(result, 201);
 });
 
@@ -113,7 +118,7 @@ sessionRoutes.get("/unused-questions", async (c) => {
 
   await assertExamAccess(db, examId, user);
 
-  const result = await getUnusedQuestions(db, user.id, examId);
+  const result = await getUnusedQuestions(db, user.id, examId, questionDomainFilterFor(user));
   return c.json(result);
 });
 
@@ -144,6 +149,8 @@ sessionRoutes.get("/:id/questions/:orderIndex", async (c) => {
   const sessionId = Number(c.req.param("id"));
   const orderIndex = Number(c.req.param("orderIndex"));
 
+  assertExamModeAllowed(user);
+
   const result = await getSessionQuestion(db, sessionId, orderIndex, user.id);
   return c.json(result);
 });
@@ -154,6 +161,8 @@ sessionRoutes.post("/:id/questions/:orderIndex/submit", async (c) => {
   const user = c.get("user");
   const sessionId = Number(c.req.param("id"));
   const orderIndex = Number(c.req.param("orderIndex"));
+  assertExamModeAllowed(user);
+
   const body = await c.req.json<{ selected_option_ids: number[] }>();
   if (!Array.isArray(body.selected_option_ids)) {
     throw new AppError(400, "selected_option_ids must be an array");
@@ -188,6 +197,8 @@ sessionRoutes.post("/:id/resume", async (c) => {
   const db = c.get("db");
   const user = c.get("user");
   const sessionId = Number(c.req.param("id"));
+
+  assertExamModeAllowed(user);
 
   const result = await resumeSession(db, sessionId, user.id);
   return c.json(result);

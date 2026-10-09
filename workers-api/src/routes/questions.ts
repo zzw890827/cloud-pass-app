@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types/env";
 import { getQuestionsPage, getQuestionDetail, submitAnswer } from "../services/question-service";
 import { AppError } from "../lib/errors";
-import { assertExamAccess, assertQuestionAccess } from "../lib/exam-access";
+import {
+  assertExamAccess,
+  assertQuestionAccess,
+  questionDomainFilterFor,
+} from "../lib/exam-access";
 
 const questionRoutes = new Hono<AppEnv>();
 
@@ -16,7 +20,14 @@ questionRoutes.get("/exams/:examId/questions", async (c) => {
 
   await assertExamAccess(db, examId, user);
 
-  const result = await getQuestionsPage(db, examId, user.id, page, perPage);
+  const result = await getQuestionsPage(
+    db,
+    examId,
+    user.id,
+    page,
+    perPage,
+    questionDomainFilterFor(user)
+  );
   return c.json(result);
 });
 

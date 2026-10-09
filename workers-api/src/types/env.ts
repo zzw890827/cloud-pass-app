@@ -14,6 +14,7 @@ export type Variables = {
     displayName: string;
     isActive: boolean;
     isAdmin: boolean;
+    canUseExamMode: boolean;
   };
 };
 
