@@ -44,8 +44,8 @@ export async function removeBookmark(db: Database, userId: number, questionId: n
 }
 
 /**
- * `visibilityFilter` (from lib/exam-access) drops bookmarks on exams the user
- * may no longer access, so the Review screen never links into a 403.
+ * `visibilityFilter` (from lib/exam-access) drops bookmarks on exams or domains
+ * the user may no longer access, so the Review screen never links into a 403.
  */
 export async function getBookmarks(
   db: Database,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, errorMessage } from "@/lib/api-client";
+import { api, ApiError, errorMessage } from "@/lib/api-client";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import ExamQuestionCard from "@/components/exam/ExamQuestionCard";
@@ -61,6 +61,14 @@ export default function ExamSessionPage() {
     try {
       const q = await api.getSessionQuestion(sessionId, idx);
       setCurrentQ(q);
+    } catch (err: unknown) {
+      // A 403 (e.g. exam mode turned off for this user) ends the session view;
+      // anything else is left to the existing behaviour.
+      if (err instanceof ApiError && err.status === 403) {
+        setError(errorMessage(err, "Failed to load question"));
+      } else {
+        throw err;
+      }
     } finally {
       setLoadingQ(false);
     }

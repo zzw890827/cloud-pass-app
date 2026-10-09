@@ -1,4 +1,4 @@
-import { eq, and, sql, count } from "drizzle-orm";
+import { eq, and, sql, count, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { questions, userProgress, bookmarks } from "../db/schema";
 
@@ -10,15 +10,20 @@ export interface ProgressSummary {
   bookmarked: number;
 }
 
+/**
+ * `domainFilter` (from lib/exam-access) limits every count to the questions
+ * the user can see, so a domain-restricted user's totals match their list.
+ */
 export async function getProgressSummary(
   db: Database,
   examId: number,
-  userId: number
+  userId: number,
+  domainFilter?: SQL
 ): Promise<ProgressSummary> {
   const [totalResult] = await db
     .select({ count: count() })
     .from(questions)
-    .where(eq(questions.examId, examId));
+    .where(and(eq(questions.examId, examId), domainFilter));
 
   const progressRows = await db
     .select({
@@ -27,7 +32,7 @@ export async function getProgressSummary(
     })
     .from(userProgress)
     .innerJoin(questions, eq(userProgress.questionId, questions.id))
-    .where(and(eq(userProgress.userId, userId), eq(questions.examId, examId)))
+    .where(and(eq(userProgress.userId, userId), eq(questions.examId, examId), domainFilter))
     .groupBy(userProgress.isCorrect);
 
   let correct = 0;
@@ -41,7 +46,7 @@ export async function getProgressSummary(
     .select({ count: count() })
     .from(bookmarks)
     .innerJoin(questions, eq(bookmarks.questionId, questions.id))
-    .where(and(eq(bookmarks.userId, userId), eq(questions.examId, examId)));
+    .where(and(eq(bookmarks.userId, userId), eq(questions.examId, examId), domainFilter));
 
   return {
     total: totalResult.count,
@@ -62,9 +67,10 @@ export interface ProgressDetailItem {
 export async function getProgressDetail(
   db: Database,
   examId: number,
-  userId: number
+  userId: number,
+  domainFilter?: SQL
 ): Promise<{ summary: ProgressSummary; items: ProgressDetailItem[] }> {
-  const summary = await getProgressSummary(db, examId, userId);
+  const summary = await getProgressSummary(db, examId, userId, domainFilter);
 
   const rows = await db
     .select({
@@ -75,7 +81,7 @@ export async function getProgressDetail(
     })
     .from(userProgress)
     .innerJoin(questions, eq(userProgress.questionId, questions.id))
-    .where(and(eq(userProgress.userId, userId), eq(questions.examId, examId)));
+    .where(and(eq(userProgress.userId, userId), eq(questions.examId, examId), domainFilter));
 
   const items = rows.map((r) => ({
     question_id: r.questionId,

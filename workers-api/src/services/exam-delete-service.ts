@@ -10,6 +10,7 @@ import {
   userProgress,
   bookmarks,
   userExamAccess,
+  userExamDomainAccess,
 } from "../db/schema";
 import { AppError } from "../lib/errors";
 
@@ -76,6 +77,9 @@ export async function deleteExam(db: Database, examId: number) {
   }
   statements.push(db.delete(questions).where(eq(questions.examId, examId)));
   statements.push(db.delete(userExamAccess).where(eq(userExamAccess.examId, examId)));
+  statements.push(
+    db.delete(userExamDomainAccess).where(eq(userExamDomainAccess.examId, examId))
+  );
   statements.push(db.delete(exams).where(eq(exams.id, examId)));
 
   // `statements` always has at least the two exam-level deletes above.

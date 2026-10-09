@@ -5,6 +5,8 @@ export interface User {
   display_name: string;
   is_active: boolean;
   is_admin: boolean;
+  /** Effective permission — always true for admins. */
+  can_use_exam_mode: boolean;
 }
 
 /** Admin view of a user, including their per-exam grants. */
@@ -14,8 +16,19 @@ export interface AdminUser {
   display_name: string;
   is_active: boolean;
   is_admin: boolean;
+  can_use_exam_mode: boolean;
   created_at: string;
   granted_exam_ids: number[];
+  /** Per-exam domain whitelist, keyed by exam id. An absent exam is unrestricted. */
+  domain_restrictions: Record<number, number[]>;
+}
+
+/** A content domain as listed for the admin domain pickers. */
+export interface AdminExamDomain {
+  id: number;
+  exam_id: number;
+  code: string;
+  name: string;
 }
 
 // Provider

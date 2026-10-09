@@ -12,6 +12,8 @@ auth.get("/me", (c) => {
     display_name: user.displayName,
     is_active: user.isActive,
     is_admin: user.isAdmin,
+    // Admins bypass the flag, so report the effective permission.
+    can_use_exam_mode: user.isAdmin || user.canUseExamMode,
   });
 });
 

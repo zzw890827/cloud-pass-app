@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types/env";
 import { addBookmark, removeBookmark, getBookmarks } from "../services/bookmark-service";
-import { assertQuestionAccess, examIdVisibleFilterFor } from "../lib/exam-access";
+import {
+  assertQuestionAccess,
+  examIdVisibleFilterFor,
+  questionDomainFilterFor,
+} from "../lib/exam-access";
+import { and } from "drizzle-orm";
 import { questions } from "../db/schema";
 
 const bookmarkRoutes = new Hono<AppEnv>();
@@ -40,7 +45,7 @@ bookmarkRoutes.get("/bookmarks", async (c) => {
     db,
     user.id,
     examId ? Number(examId) : undefined,
-    examIdVisibleFilterFor(questions.examId, user)
+    and(examIdVisibleFilterFor(questions.examId, user), questionDomainFilterFor(user))
   );
   return c.json(result);
 });

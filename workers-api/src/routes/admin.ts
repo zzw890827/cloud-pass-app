@@ -12,6 +12,8 @@ import {
   listUsersWithAccess,
   updateUserFlags,
   setUserExamAccess,
+  setUserExamDomains,
+  listExamDomains,
   updateExamVisibility,
 } from "../services/user-admin-service";
 import { AppError } from "../lib/errors";
@@ -105,7 +107,13 @@ adminRoutes.get("/users", async (c) => {
   return c.json(await listUsersWithAccess(db));
 });
 
-// PATCH /admin/users/:id — is_active / is_admin
+// GET /admin/exam-domains — every exam's domains (for the domain pickers)
+adminRoutes.get("/exam-domains", async (c) => {
+  const db = c.get("db");
+  return c.json(await listExamDomains(db));
+});
+
+// PATCH /admin/users/:id — is_active / is_admin / can_use_exam_mode
 adminRoutes.patch("/users/:id", async (c) => {
   const db = c.get("db");
   const actingUser = c.get("user");
@@ -113,7 +121,7 @@ adminRoutes.patch("/users/:id", async (c) => {
   if (!Number.isInteger(userId)) throw new AppError(400, "Invalid user id");
 
   const body = await c.req
-    .json<{ is_active?: unknown; is_admin?: unknown }>()
+    .json<{ is_active?: unknown; is_admin?: unknown; can_use_exam_mode?: unknown }>()
     .catch(() => {
       throw new AppError(400, "Invalid JSON body");
     });
@@ -126,10 +134,14 @@ adminRoutes.patch("/users/:id", async (c) => {
   if (body.is_admin !== undefined && typeof body.is_admin !== "boolean") {
     throw new AppError(400, "is_admin must be a boolean");
   }
+  if (body.can_use_exam_mode !== undefined && typeof body.can_use_exam_mode !== "boolean") {
+    throw new AppError(400, "can_use_exam_mode must be a boolean");
+  }
 
   const result = await updateUserFlags(db, userId, actingUser.id, {
     isActive: body.is_active as boolean | undefined,
     isAdmin: body.is_admin as boolean | undefined,
+    canUseExamMode: body.can_use_exam_mode as boolean | undefined,
   });
   return c.json(result);
 });
@@ -148,6 +160,26 @@ adminRoutes.put("/users/:id/exams", async (c) => {
   }
 
   const result = await setUserExamAccess(db, userId, body.exam_ids as number[]);
+  return c.json(result);
+});
+
+// PUT /admin/users/:id/exams/:examId/domains — replace the user's domain
+// whitelist for one exam; an empty list lifts the restriction
+adminRoutes.put("/users/:id/exams/:examId/domains", async (c) => {
+  const db = c.get("db");
+  const userId = Number(c.req.param("id"));
+  const examId = Number(c.req.param("examId"));
+  if (!Number.isInteger(userId)) throw new AppError(400, "Invalid user id");
+  if (!Number.isInteger(examId)) throw new AppError(400, "Invalid exam id");
+
+  const body = await c.req.json<{ domain_ids?: unknown }>().catch(() => {
+    throw new AppError(400, "Invalid JSON body");
+  });
+  if (!body || !Array.isArray(body.domain_ids)) {
+    throw new AppError(400, "domain_ids (array of domain ids) is required");
+  }
+
+  const result = await setUserExamDomains(db, userId, examId, body.domain_ids as number[]);
   return c.json(result);
 });
 

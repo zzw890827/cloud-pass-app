@@ -175,9 +175,9 @@ export const api = {
   getAdminUsers: () => request<import("@/types").AdminUser[]>("/admin/users"),
   updateAdminUser: (
     userId: number,
-    patch: { is_active?: boolean; is_admin?: boolean }
+    patch: { is_active?: boolean; is_admin?: boolean; can_use_exam_mode?: boolean }
   ) =>
-    request<{ id: number; is_active: boolean; is_admin: boolean }>(
+    request<{ id: number; is_active: boolean; is_admin: boolean; can_use_exam_mode: boolean }>(
       `/admin/users/${userId}`,
       { method: "PATCH", body: JSON.stringify(patch) }
     ),
@@ -185,6 +185,13 @@ export const api = {
     request<{ user_id: number; granted_exam_ids: number[] }>(
       `/admin/users/${userId}/exams`,
       { method: "PUT", body: JSON.stringify({ exam_ids: examIds }) }
+    ),
+  getAdminExamDomains: () =>
+    request<import("@/types").AdminExamDomain[]>("/admin/exam-domains"),
+  setUserExamDomains: (userId: number, examId: number, domainIds: number[]) =>
+    request<{ user_id: number; exam_id: number; domain_ids: number[] }>(
+      `/admin/users/${userId}/exams/${examId}/domains`,
+      { method: "PUT", body: JSON.stringify({ domain_ids: domainIds }) }
     ),
 };
 

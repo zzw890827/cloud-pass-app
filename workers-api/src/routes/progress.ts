@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../types/env";
 import { getProgressDetail, resetProgress } from "../services/progress-service";
-import { assertExamAccess } from "../lib/exam-access";
+import { assertExamAccess, questionDomainFilterFor } from "../lib/exam-access";
 
 const progressRoutes = new Hono<AppEnv>();
 
@@ -13,7 +13,7 @@ progressRoutes.get("/exams/:examId/progress", async (c) => {
 
   await assertExamAccess(db, examId, user);
 
-  const result = await getProgressDetail(db, examId, user.id);
+  const result = await getProgressDetail(db, examId, user.id, questionDomainFilterFor(user));
   return c.json(result);
 });
 

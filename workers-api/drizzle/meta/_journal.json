@@ -50,6 +50,13 @@
       "when": 1787837293718,
       "tag": "0006_robust_zarek",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791554824654,
+      "tag": "0007_modern_metal_master",
+      "breakpoints": true
     }
   ]
 }

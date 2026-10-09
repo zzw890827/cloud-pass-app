@@ -1,4 +1,4 @@
-import { eq, and, count, sql, inArray } from "drizzle-orm";
+import { eq, and, count, sql, inArray, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { questions, options, userProgress, bookmarks } from "../db/schema";
 import { AppError } from "../lib/errors";
@@ -25,15 +25,17 @@ export async function getQuestionsPage(
   examId: number,
   userId: number,
   page: number,
-  perPage: number
+  perPage: number,
+  domainFilter?: SQL
 ) {
   perPage = Math.min(perPage, 200);
   const offset = (page - 1) * perPage;
+  const where = and(eq(questions.examId, examId), domainFilter);
 
   const [totalResult] = await db
     .select({ count: count() })
     .from(questions)
-    .where(eq(questions.examId, examId));
+    .where(where);
 
   const total = totalResult.count;
   const totalPages = Math.ceil(total / perPage);
@@ -47,7 +49,7 @@ export async function getQuestionsPage(
       orderIndex: questions.orderIndex,
     })
     .from(questions)
-    .where(eq(questions.examId, examId))
+    .where(where)
     .orderBy(questions.orderIndex)
     .limit(perPage)
     .offset(offset);
