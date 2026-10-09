@@ -1,9 +1,49 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { providers, exams, questions, options } from "../db/schema";
+import { providers, exams, examDomains, questions, options } from "../db/schema";
 import type { ImportPayload } from "../schemas/import";
+import { AppError } from "../lib/errors";
+
+/**
+ * Reject bad domain references before anything is written — the import is not
+ * transactional, so failing halfway would leave a partially imported exam.
+ * A question may reference a domain declared in this payload or one stored by
+ * an earlier import of the same exam.
+ */
+async function validateDomains(db: Database, data: ImportPayload) {
+  const declared = data.exam.domains ?? [];
+  const seen = new Set<string>();
+  for (const d of declared) {
+    if (seen.has(d.code)) {
+      throw new AppError(422, `Domain "${d.code}" is declared more than once in exam.domains.`);
+    }
+    seen.add(d.code);
+  }
+
+  const existingExam = await db.query.exams.findFirst({
+    where: eq(exams.code, data.exam.code),
+  });
+  if (existingExam) {
+    const stored = await db
+      .select({ code: examDomains.code })
+      .from(examDomains)
+      .where(eq(examDomains.examId, existingExam.id));
+    for (const d of stored) seen.add(d.code);
+  }
+
+  for (const q of data.exam.questions) {
+    if (q.domain && !seen.has(q.domain)) {
+      throw new AppError(
+        422,
+        `Question "${q.external_id}" references unknown domain "${q.domain}". Declare it in exam.domains.`
+      );
+    }
+  }
+}
 
 export async function importQuestions(db: Database, data: ImportPayload) {
+  await validateDomains(db, data);
+
   // Upsert provider by slug
   let provider = await db.query.providers.findFirst({
     where: eq(providers.slug, data.provider.slug),
@@ -64,6 +104,34 @@ export async function importQuestions(db: Database, data: ImportPayload) {
     exam = created;
   }
 
+  // Upsert content domains by (exam_id, code) and build a code -> id lookup that
+  // also covers domains stored by an earlier import.
+  const domainByCode = new Map<string, number>();
+  const existingDomains = await db
+    .select({ id: examDomains.id, code: examDomains.code })
+    .from(examDomains)
+    .where(eq(examDomains.examId, exam.id));
+  for (const d of existingDomains) domainByCode.set(d.code, d.id);
+
+  const declaredDomains = data.exam.domains ?? [];
+  for (let i = 0; i < declaredDomains.length; i++) {
+    const d = declaredDomains[i];
+    const orderIndex = d.order_index ?? i;
+    const existingId = domainByCode.get(d.code);
+    if (existingId !== undefined) {
+      await db
+        .update(examDomains)
+        .set({ name: d.name, weight: d.weight, orderIndex })
+        .where(eq(examDomains.id, existingId));
+    } else {
+      const [created] = await db
+        .insert(examDomains)
+        .values({ examId: exam.id, code: d.code, name: d.name, weight: d.weight, orderIndex })
+        .returning();
+      domainByCode.set(d.code, created.id);
+    }
+  }
+
   // Get existing question external_ids for this exam
   const existingQuestions = await db
     .select({ externalId: questions.externalId })
@@ -77,7 +145,17 @@ export async function importQuestions(db: Database, data: ImportPayload) {
   let currentOrderIndex = existingIds.size;
 
   for (const q of data.exam.questions) {
+    // Validated up front, so a referenced code always resolves.
+    const domainId = q.domain ? (domainByCode.get(q.domain) ?? null) : null;
+
     if (existingIds.has(q.external_id)) {
+      // Backfill the domain on a previously imported question when provided.
+      if (q.domain) {
+        await db
+          .update(questions)
+          .set({ domainId })
+          .where(and(eq(questions.examId, exam.id), eq(questions.externalId, q.external_id)));
+      }
       questionsSkipped++;
       continue;
     }
@@ -91,6 +169,7 @@ export async function importQuestions(db: Database, data: ImportPayload) {
       .insert(questions)
       .values({
         examId: exam.id,
+        domainId,
         externalId: q.external_id,
         questionText: q.text,
         questionType: q.type,

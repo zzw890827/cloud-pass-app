@@ -23,6 +23,7 @@ const choiceQuestionSchema = z.object({
   text: z.string(),
   type: z.enum(["single", "multi"]),
   explanation: z.string().optional().nullable(),
+  domain: z.string().optional().nullable(), // references a domain `code` declared on the exam
   options: z.array(importOptionSchema).min(2),
 });
 
@@ -31,6 +32,7 @@ const hotspotQuestionSchema = z.object({
   text: z.string(),
   type: z.literal("hotspot"),
   explanation: z.string().optional().nullable(),
+  domain: z.string().optional().nullable(), // references a domain `code` declared on the exam
   // Column headings for the Answer Area, e.g. "Statements:" and
   // "Select Yes or No:". Optional — the table renders without a header row
   // when they are absent.
@@ -76,6 +78,13 @@ export const importQuestionSchema = z
     });
   });
 
+export const importDomainSchema = z.object({
+  code: z.string(), // stable per-exam key referenced by questions
+  name: z.string(),
+  weight: z.number().int().nonnegative(), // relative weight, normalized at selection time
+  order_index: z.number().int().optional(),
+});
+
 export const importExamSchema = z.object({
   code: z.string(),
   name: z.string(),
@@ -83,6 +92,7 @@ export const importExamSchema = z.object({
   num_questions: z.number().int().optional(),
   pass_percentage: z.number().int().optional(),
   time_limit_minutes: z.number().int().optional(),
+  domains: z.array(importDomainSchema).optional(),
   questions: z.array(importQuestionSchema),
 });
 

@@ -3,6 +3,7 @@ import type { Database } from "../db/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   exams,
+  examDomains,
   questions,
   options,
   examSessions,
@@ -76,6 +77,7 @@ export async function deleteExam(db: Database, examId: number) {
     statements.push(db.delete(userProgress).where(inArray(userProgress.questionId, chunk)));
   }
   statements.push(db.delete(questions).where(eq(questions.examId, examId)));
+  statements.push(db.delete(examDomains).where(eq(examDomains.examId, examId)));
   statements.push(db.delete(userExamAccess).where(eq(userExamAccess.examId, examId)));
   statements.push(
     db.delete(userExamDomainAccess).where(eq(userExamDomainAccess.examId, examId))
