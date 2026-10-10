@@ -140,6 +140,7 @@ export interface SubmitAnswerResponse {
   is_correct: boolean;
   correct_option_ids: number[];
   explanation: string | null;
+  domain_name: string | null;
   options: OptionWithAnswer[];
 }
 

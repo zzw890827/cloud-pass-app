@@ -197,6 +197,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
         <ExplanationPanel
           isCorrect={result.is_correct}
           explanation={result.explanation}
+          domainName={result.domain_name}
           // Hotspot correctness is per row, not per option — every option would
           // render as "wrong" here. The answer area already shows the marks.
           options={isHotspot ? undefined : result.options}

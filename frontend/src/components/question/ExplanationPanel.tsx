@@ -1,13 +1,20 @@
+import Badge from "@/components/ui/Badge";
 import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
 import type { OptionWithAnswer } from "@/types";
 
 interface ExplanationPanelProps {
   isCorrect: boolean;
   explanation: string | null;
+  domainName?: string | null;
   options?: OptionWithAnswer[];
 }
 
-export default function ExplanationPanel({ isCorrect, explanation, options }: ExplanationPanelProps) {
+export default function ExplanationPanel({
+  isCorrect,
+  explanation,
+  domainName,
+  options,
+}: ExplanationPanelProps) {
   return (
     <div className="space-y-3">
       {/* Result + Explanation */}
@@ -16,9 +23,13 @@ export default function ExplanationPanel({ isCorrect, explanation, options }: Ex
           isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
         }`}
       >
-        <p className={`font-semibold text-sm ${isCorrect ? "text-green-700" : "text-red-700"}`}>
-          {isCorrect ? "Correct!" : "Incorrect"}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`font-semibold text-sm ${isCorrect ? "text-green-700" : "text-red-700"}`}>
+            {isCorrect ? "Correct!" : "Incorrect"}
+          </p>
+          {/* Questions imported without a domain have none to show */}
+          {domainName && <Badge>Domain: {domainName}</Badge>}
+        </div>
         {explanation && (
           <div className="text-sm text-gray-700 mt-2">
             <MarkdownRenderer content={explanation} />

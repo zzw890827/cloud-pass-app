@@ -1,6 +1,6 @@
 import { eq, and, count, sql, inArray, type SQL } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { questions, options, userProgress, bookmarks } from "../db/schema";
+import { questions, options, userProgress, bookmarks, examDomains } from "../db/schema";
 import { AppError } from "../lib/errors";
 import { gradeAnswer, hotspotHeaders, publicHotspotRows } from "../lib/grading";
 
@@ -163,6 +163,13 @@ export async function submitAnswer(
 
   const { isCorrect, correctOptionIds } = gradeAnswer(question, opts, selectedOptionIds);
 
+  const domain = question.domainId
+    ? await db.query.examDomains.findFirst({
+        columns: { name: true },
+        where: eq(examDomains.id, question.domainId),
+      })
+    : undefined;
+
   // Upsert user progress
   await db
     .insert(userProgress)
@@ -186,6 +193,7 @@ export async function submitAnswer(
     // For hotspot this is row-ordered: entry i is the correct option for row i.
     correct_option_ids: correctOptionIds,
     explanation: question.explanation,
+    domain_name: domain?.name ?? null,
     options: opts.map((o) => ({
       id: o.id,
       label: o.label,
